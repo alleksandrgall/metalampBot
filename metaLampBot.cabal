@@ -25,7 +25,8 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
+      API
+      Config
   other-modules:
       Paths_metaLampBot
   hs-source-dirs:
@@ -33,8 +34,10 @@ library
   build-depends:
       aeson
     , base >=4.7 && <5
+    , conferer >=1.1.0.0
     , hspec
     , req
+    , text >=1.2.4
   default-language: Haskell2010
 
 executable metaLampBot-exe
@@ -47,9 +50,11 @@ executable metaLampBot-exe
   build-depends:
       aeson
     , base >=4.7 && <5
+    , conferer >=1.1.0.0
     , hspec
     , metaLampBot
     , req
+    , text >=1.2.4
   default-language: Haskell2010
 
 test-suite metaLampBot-test
@@ -63,7 +68,9 @@ test-suite metaLampBot-test
   build-depends:
       aeson
     , base >=4.7 && <5
+    , conferer >=1.1.0.0
     , hspec
     , metaLampBot
     , req
+    , text >=1.2.4
   default-language: Haskell2010

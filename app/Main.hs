@@ -1,6 +1,12 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Main where
-
-import Lib
+import Config
+import Conferer
+import Data.Aeson
 
 main :: IO ()
-main = someFunc
+main = do
+    config <- mkConfig "TestConfigApp"
+    (appconf :: AppConfig) <- fetch config
+    print appconf
