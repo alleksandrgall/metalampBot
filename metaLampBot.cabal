@@ -27,6 +27,7 @@ library
   exposed-modules:
       API
       Config
+      ResponseTypes
   other-modules:
       Paths_metaLampBot
   hs-source-dirs:
