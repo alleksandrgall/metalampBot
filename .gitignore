@@ -24,3 +24,4 @@ cabal.project.local~
 .ghc.environment.*
 .vscode
 .history
+config/bot.local.properties
