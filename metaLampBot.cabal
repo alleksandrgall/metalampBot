@@ -27,7 +27,7 @@ library
   exposed-modules:
       API
       Config
-      ResponseTypes
+      TelegramResponseTypes
   other-modules:
       Paths_metaLampBot
   hs-source-dirs:

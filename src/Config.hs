@@ -1,19 +1,23 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveGeneric  #-}
-module Config where
-
-
+module Config
+    -- ( AppConfig (..),
+    --   Messenger(..),
+    --   fetchConfig)
+    where
 
 import Data.Text ( toLower, empty, Text )
 import GHC.Generics ( Generic )
-import Conferer ( DefaultConfig(..), FromConfig ) --(DefaultConfig (configDef), FromConfig)
-import Data.Aeson 
+import Conferer ( DefaultConfig(..), FromConfig, fetch, mkConfig' ) --(DefaultConfig (configDef), FromConfig)
 import Conferer.FromConfig (fetchFromConfigWith, FromConfig (fromConfig))
+import Conferer.Source.CLIArgs as CLI ( fromConfig )
+import Conferer.Source.PropertiesFile as Files ( fromFilePath )
+import Conferer.Source.PropertiesFile as Prop ( fromConfig )
 
 data Messenger = Tele | VK deriving (Show)
 
 instance FromConfig Messenger where
-    fromConfig = fetchFromConfigWith (\s -> case toLower s of 
+    fromConfig = fetchFromConfigWith (\s -> case toLower s of
         "vk" -> Just VK
         "tele" -> Just Tele
         "telegram" -> Just Tele
@@ -32,7 +36,7 @@ data Help = Help {
 
 instance FromConfig Help
 
-data AppConfig = AppConfig 
+data AppConfig = AppConfig
     {
         appConfigToken :: Text,
         appConfigMessenger :: Messenger,
@@ -46,12 +50,15 @@ instance FromConfig AppConfig
 instance DefaultConfig AppConfig where
     configDef = AppConfig
         {
-            appConfigToken = "This is token placeholder" , 
+            appConfigToken = "This is token placeholder" ,
             appConfigMessenger = Tele,
             appConfigRepeat = Repeat {
-                repeatDefaultNumber = 1, 
+                repeatDefaultNumber = 1,
                 repeatMessage = "This is default repeat message"},
             appConfigHelp = Help {
                 helpMessage = "This is default help message"}
         }
+
+fetchConfig :: IO AppConfig
+fetchConfig = fetch =<< mkConfig' [] [CLI.fromConfig, Prop.fromConfig "local", Files.fromFilePath "./config/bot.properties"]
 
