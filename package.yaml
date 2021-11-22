@@ -27,9 +27,14 @@ dependencies:
 - bytestring
 - text >= 1.2.4
 - conferer >= 1.1.0.0
+- mtl >= 2.2.2
 
 library:
   source-dirs: src
+  default-extensions:
+    - FlexibleContexts
+    - OverloadedStrings
+    - GADTs
 
 executables:
   metaLampBot-exe:

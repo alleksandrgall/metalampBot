@@ -25,19 +25,24 @@ source-repository head
 
 library
   exposed-modules:
-      API
+      Bot.API
+      Bot.ResponseTypes
       Config
-      TelegramResponseTypes
   other-modules:
       Paths_metaLampBot
   hs-source-dirs:
       src
+  default-extensions:
+      FlexibleContexts
+      OverloadedStrings
+      GADTs
   build-depends:
       aeson
     , base >=4.7 && <5
     , bytestring
     , conferer >=1.1.0.0
     , hspec
+    , mtl >=2.2.2
     , req
     , text >=1.2.4
   default-language: Haskell2010
@@ -56,6 +61,7 @@ executable metaLampBot-exe
     , conferer >=1.1.0.0
     , hspec
     , metaLampBot
+    , mtl >=2.2.2
     , req
     , text >=1.2.4
   default-language: Haskell2010
@@ -75,6 +81,7 @@ test-suite metaLampBot-test
     , conferer >=1.1.0.0
     , hspec
     , metaLampBot
+    , mtl >=2.2.2
     , req
     , text >=1.2.4
   default-language: Haskell2010

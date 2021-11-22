@@ -15,7 +15,7 @@ import Conferer.Source.PropertiesFile as Files ( fromFilePath )
 import Conferer.Source.PropertiesFile as Prop ( fromConfig )
 
 data Messenger = Tele | VK deriving (Show)
-
+type Token = Text
 instance FromConfig Messenger where
     fromConfig = fetchFromConfigWith (\s -> case toLower s of
         "vk" -> Just VK
@@ -38,7 +38,7 @@ instance FromConfig Help
 
 data AppConfig = AppConfig
     {
-        appConfigToken :: Text,
+        appConfigToken :: Token,
         appConfigMessenger :: Messenger,
         appConfigRepeat :: Repeat,
         appConfigHelp :: Help
