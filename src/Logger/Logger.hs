@@ -36,12 +36,8 @@ class HasLogLevel env where
 instance HasLogLevel LogLevel where
     getLogLevel = id
 
-instance (HasLog m env, HasLogLevel env, MonadLog m) => MonadLog (ReaderT env m) where
+instance (HasLog m env, HasLogLevel env) => MonadLog (ReaderT env m) where
     log lvl msg = do
         envLogger <- asks getLog
         envLevel <- asks getLogLevel
         when (lvl >= envLevel) (lift $ envLogger lvl msg) 
-
--- instance MonadLog (Writer Text) where
---     log = tell
-

@@ -95,4 +95,4 @@ labelToSnakeCase :: String -> Options
 labelToSnakeCase prefix = defaultOptions { fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix prefix }
 
 addNameToId :: String -> Options -> Options
-addNameToId name opts = opts { fieldLabelModifier = \label -> if label == "id" then name ++ "_id" else label }  
+addNameToId name opts = opts { fieldLabelModifier = \label -> if label == "id" then name ++ "_id" else label } 
