@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveGeneric  #-}
 module Config
     -- ( AppConfig (..),
     --   Messenger(..),
@@ -14,6 +12,8 @@ import Conferer.Source.CLIArgs as CLI ( fromConfig )
 import Conferer.Source.PropertiesFile as Files ( fromFilePath )
 import Conferer.Source.PropertiesFile as Prop ( fromConfig )
 
+import Logger
+
 data Messenger = Tele | VK deriving (Show)
 type Token = Text
 instance FromConfig Messenger where
@@ -22,6 +22,14 @@ instance FromConfig Messenger where
         "tele" -> Just Tele
         "telegram" -> Just Tele
         _ -> Nothing)
+
+instance FromConfig LogLevel where
+    fromConfig = fetchFromConfigWith (\s -> case toLower s of
+        "debug" -> Just Debug
+        "warning" -> Just Warning
+        "info" -> Just Info
+        "error" -> Just Error
+        _ -> Nothing) 
 
 data Repeat = Repeat {
     repeatDefaultNumber :: Int,
@@ -41,8 +49,8 @@ data AppConfig = AppConfig
         appConfigToken :: Token,
         appConfigMessenger :: Messenger,
         appConfigRepeat :: Repeat,
-        appConfigHelp :: Help
-
+        appConfigHelp :: Help,
+        appConfigLogLevel :: LogLevel
     } deriving (Generic, Show)
 
 instance FromConfig AppConfig
@@ -56,7 +64,8 @@ instance DefaultConfig AppConfig where
                 repeatDefaultNumber = 1,
                 repeatMessage = "This is default repeat message"},
             appConfigHelp = Help {
-                helpMessage = "This is default help message"}
+                helpMessage = "This is default help message"},
+            appConfigLogLevel = Info
         }
 
 fetchConfig :: IO AppConfig

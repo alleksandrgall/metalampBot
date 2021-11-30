@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
+{-# LANGUAGE DefaultSignatures #-}
 
 module Bot.API where
 
@@ -14,15 +14,20 @@ import Data.Aeson (FromJSON (parseJSON))
 import Control.Exception (throwIO)
 import Control.Monad.RWS
 import Data.Aeson.Types (parseEither)
+import Control.Monad.Except
+import Control.Monad.State
+
 
 type Method = Text
 
-class MonadBot m where
+class (Monad m) => MonadBot m where
     makeReq :: (FromJSON a) => Method -> [(Text, Text)] -> m (Either String a)
+    
 
--- newtype (MonadTrans m) => App m a = App {unApp :: RWST AppConfig [(Text,Text)] () (m IO) a}
+-- newtype App t a = App {unApp :: ReaderT AppConfig (StateT )}
 --     deriving (Functor, Applicative, Monad, MonadIO, MonadReader AppConfig, MonadWriter [(Text, Text)], MonadState ())
 
+-- newtype App a = App {unApp :: ReaderT AppConfig (StateT Int ())}
 instance (Monad m, MonadRWS AppConfig [(Text, Text)] () m, MonadHttp m) => MonadBot m where
     makeReq method params = do
         messenger <- asks appConfigMessenger

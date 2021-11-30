@@ -24,6 +24,7 @@ dependencies:
 - hspec
 - req
 - aeson
+- stm
 - bytestring
 - text >= 1.2.4
 - conferer >= 1.1.0.0
@@ -34,6 +35,7 @@ library:
   default-extensions:
     - FlexibleContexts
     - OverloadedStrings
+    - DeriveGeneric
     - GADTs
 
 executables:
