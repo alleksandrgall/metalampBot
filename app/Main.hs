@@ -27,7 +27,7 @@ main = do
   let
     decodeMessage :: BS.ByteString -> Either String Message
     decodeMessage = eitherDecode
-  messageText <- (decodeMessage <$> BS.readFile "temp/messageText.json")
+  messageText <- decodeMessage <$> BS.readFile "temp/messageText.json"
   putStrLn $ show messageText
 
   -- logged <- newTVarIO ""
