@@ -28,8 +28,10 @@ library
       Bot.API
       Bot.ResponseTypes
       Config
+      Env
       Logger
       Logger.Logger
+      Utils
   other-modules:
       Paths_metaLampBot
   hs-source-dirs:
