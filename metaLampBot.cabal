@@ -31,7 +31,6 @@ library
       Env
       Logger
       Logger.Logger
-      Utils
   other-modules:
       Paths_metaLampBot
   hs-source-dirs:

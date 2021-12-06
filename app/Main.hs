@@ -5,31 +5,55 @@
 module Main where
 
 import Config
-import Env
+import Bot.ResponseTypes
 import Control.Concurrent.STM ( newTVarIO, modifyTVar', STM, atomically, readTVarIO )
 import Control.Monad.Reader
 import Logger
 import Data.Text as T
 import Data.Text.Lazy.Encoding as E
 import Prelude hiding (log)
-import Bot.ResponseTypes
-import Data.Aeson.Types
 import Data.Aeson
 import qualified Data.ByteString.Lazy as BS
 import Control.Monad.Except (runExcept, runExceptT)
-import Data.String
 
 
+type Token = String
+
+-- getMe :: Token ->  IO User
+-- getMe = do
 
 
 main = do
   config <- fetchConfig
+  logOut <- newTVarIO ""
   let
     decodeMessage :: BS.ByteString -> Either String Message
     decodeMessage = eitherDecode
+    decodeUpdate :: BS.ByteString -> Either String Update
+    decodeUpdate = eitherDecode
+    decodeResponseUpdates :: BS.ByteString -> Either String (Response [Update])
+    decodeResponseUpdates = decodeResponseUpdates
+  
+  print "----------------------------------------------------"
+  print "messageText"
   messageText <- decodeMessage <$> BS.readFile "temp/messageText.json"
-  putStrLn $ show messageText
-
+  print messageText
+  print "----------------------------------------------------"
+  print "messagePhoto"
+  messagePhoto <- decodeMessage <$> BS.readFile "temp/messagePhoto.json"
+  print messagePhoto
+  print "----------------------------------------------------"  
+  print "updatePhoto"
+  updatePhoto <- decodeUpdate <$> BS.readFile "temp/updatePhoto.json"
+  print updatePhoto
+  print "----------------------------------------------------"
+  print "updateMessage"
+  updateMessage <- decodeUpdate <$> BS.readFile "temp/updateMessage.json"
+  print updateMessage
+  print "----------------------------------------------------"
+  print "responseUpdatesNoQuery"
+  responseUpdatesNoQuery <- decodeResponseUpdates <$> BS.readFile "temp/responseUpdatesNoQuery.json"
+  print responseUpdatesNoQuery
   -- logged <- newTVarIO ""
   -- currentUp <- newTVarIO 1
   -- let

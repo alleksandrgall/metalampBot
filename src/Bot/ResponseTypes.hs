@@ -11,7 +11,10 @@ import Data.Maybe (fromJust)
 import Data.String (IsString (fromString))
 import GHC.Generics (Generic)
 import GHC.Int (Int64)
+import Control.Monad ( MonadPlus(mzero) ) 
+import Control.Applicative (Alternative((<|>)))
 
+--type for a Telegram response
 data Response a = Response
   { responseOk :: Bool,
     responseDescription :: Maybe String,
@@ -22,6 +25,7 @@ data Response a = Response
 instance FromJSON a => FromJSON (Response a) where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "response" }
 
+--type for a Telegram chat
 data Chat = Chat
   { chatId :: Int64,
     chatType :: String,
@@ -35,6 +39,7 @@ data Chat = Chat
 instance FromJSON Chat where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "chat" }
 
+--type for a Telegram user
 data User = User
   { userId :: Int64,
     userIsBot :: Bool,
@@ -48,7 +53,11 @@ data User = User
 instance FromJSON User where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "user" }
 
-data PhotoSize = PhotoSize
+--type for a Telegram photo which is an array of PhotoSize (basicaly with the photo lives all it's thumbnail and previews)
+
+type Photo = [PhotoSize]
+
+newtype PhotoSize = PhotoSize
   { photoSizeFileId :: String
   }
   deriving (Show, Generic)
@@ -56,36 +65,18 @@ data PhotoSize = PhotoSize
 instance FromJSON PhotoSize where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "photoSize" }
 
-data Document = Document
+--type for a Telegram document
+newtype Document = Document
   { documentFileId :: String
   }
   deriving (Show, Generic)
 
+
 instance FromJSON Document where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "document" }
 
-data Message = Message
-  { messageId :: Int,
-    messageFrom :: Maybe User,
-    messageDate :: Int,
-    messageChat :: Chat,
-    messageForwardFrom :: Maybe User,
-    messageReplyToMessage :: Maybe Message,
-    messageText :: Maybe String,
-    messagePhoto :: Maybe [PhotoSize],
-    messageDocument :: Maybe Document,
-    messageNewChatParticipant :: Maybe User,
-    messageLeftChatParticipant :: Maybe User,
-    messageNewChatTitle :: Maybe String,
-    messageGroupChatCreated :: Maybe Bool
-  }
-  deriving (Show, Generic)
-
-instance FromJSON Message where
-  parseJSON = genericParseJSON defaultOptions { fieldLabelModifier = 
-    (\s -> if s == "id" then "message_id" else s) . camelTo2 '_' . fromJust . stripPrefix "message" }
-
-data Sticker = Sticker
+--Type for a Telegram sticker
+newtype Sticker = Sticker
   { stickerFileId :: String
   }
   deriving (Show, Generic)
@@ -93,12 +84,56 @@ data Sticker = Sticker
 instance FromJSON Sticker where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "sticker" }
 
-data Update a = Update
-  { updateOk :: Bool,
-    updateResult :: Maybe a
+--Sum type of all posible mutually exclusive MesContent message can contain
+data MesContent = MesContentText String | MesContentPhoto Photo | MesContentDocument  Document | MesContentSticker Sticker
+  deriving (Show, Generic)
+
+instance FromJSON MesContent where
+  parseJSON (Object o) = (MesContentText <$> o .: "text") <|> (MesContentPhoto <$> o .: "photo") <|> (MesContentDocument <$> o .: "document")  
+    <|> (MesContentSticker <$> o .: "sticker")
+  parseJSON _ = mzero
+
+--type for a Telegram message
+data Message = Message
+  { messageId :: Int,
+    messageFrom :: Maybe User,
+    messageDate :: Int,
+    messageChat :: Chat,
+    messageMesContent :: MesContent,
+    messageCaption :: Maybe String
   }
   deriving (Show, Generic)
 
-instance (FromJSON a) => FromJSON (Update a) where
-  parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "update" }
+instance FromJSON Message where
+  parseJSON (Object o) = Message <$> o .: "message_id" <*> o .:? "from" <*> o .: "date" <*> o .: "chat" <*>
+    parseJSON (Object o) <*>  o .:? "caption"
+  parseJSON _ = mzero
+
+--type for a Telegram Callback quary returned after a button press
+data CallbackQuery = CallbackQuery 
+  { callBackQueryId :: String,
+    callBackQueryFrom :: User,
+    callBackQueryData :: String
+  } deriving (Show, Generic)
+
+instance FromJSON CallbackQuery where
+  parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "callBackQuery" }
+
+--Sum type for mutually exclusive update content
+data UpdateContent = UpdateContentMessage Message | UpdateContentCallbackQuary CallbackQuery
+  deriving (Show, Generic)
+instance FromJSON UpdateContent where
+  parseJSON (Object o) = (UpdateContentMessage <$> o .: "message") <|> (UpdateContentCallbackQuary <$> o .: "callback_query")
+  parseJSON _ = mzero
+
+--type for a Telegram update
+data Update = Update
+  { updateId :: Int,
+    updateContent :: UpdateContent
+  }
+  deriving (Show, Generic)
+
+instance FromJSON Update where
+  parseJSON (Object o) = Update <$> o .: "update_id" <*> parseJSON (Object o) 
+  parseJSON _ = mzero
 
