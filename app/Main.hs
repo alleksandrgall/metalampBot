@@ -32,7 +32,7 @@ main = do
     decodeUpdate :: BS.ByteString -> Either String Update
     decodeUpdate = eitherDecode
     decodeResponseUpdates :: BS.ByteString -> Either String (Response [Update])
-    decodeResponseUpdates = decodeResponseUpdates
+    decodeResponseUpdates = eitherDecode
   
   print "----------------------------------------------------"
   print "messageText"

@@ -53,7 +53,7 @@ data User = User
 instance FromJSON User where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "user" }
 
---type for a Telegram photo which is an array of PhotoSize (basicaly with the photo lives all it's thumbnail and previews)
+--type for a Telegram photo which is an array of PhotoSize (basicaly all photo's thumbnails and previews live with it)
 
 type Photo = [PhotoSize]
 
@@ -84,13 +84,14 @@ newtype Sticker = Sticker
 instance FromJSON Sticker where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "sticker" }
 
---Sum type of all posible mutually exclusive MesContent message can contain
-data MesContent = MesContentText String | MesContentPhoto Photo | MesContentDocument  Document | MesContentSticker Sticker
+--Sum type of all posible mutually exclusive MessageContent message can contain
+data MessageContent = MessageContentText String | MessageContentPhoto Photo | MessageContentDocument  Document | MessageContentSticker Sticker
   deriving (Show, Generic)
 
-instance FromJSON MesContent where
-  parseJSON (Object o) = (MesContentText <$> o .: "text") <|> (MesContentPhoto <$> o .: "photo") <|> (MesContentDocument <$> o .: "document")  
-    <|> (MesContentSticker <$> o .: "sticker")
+instance FromJSON MessageContent where
+  parseJSON (Object o) = 
+    MessageContentText <$> o .: "text" <|> MessageContentPhoto <$> o .: "photo" <|> 
+    MessageContentDocument <$> o .: "document"  <|> MessageContentSticker <$> o .: "sticker"
   parseJSON _ = mzero
 
 --type for a Telegram message
@@ -99,7 +100,7 @@ data Message = Message
     messageFrom :: Maybe User,
     messageDate :: Int,
     messageChat :: Chat,
-    messageMesContent :: MesContent,
+    messageContent :: MessageContent,
     messageCaption :: Maybe String
   }
   deriving (Show, Generic)
@@ -123,7 +124,7 @@ instance FromJSON CallbackQuery where
 data UpdateContent = UpdateContentMessage Message | UpdateContentCallbackQuary CallbackQuery
   deriving (Show, Generic)
 instance FromJSON UpdateContent where
-  parseJSON (Object o) = (UpdateContentMessage <$> o .: "message") <|> (UpdateContentCallbackQuary <$> o .: "callback_query")
+  parseJSON (Object o) = UpdateContentMessage <$> o .: "message" <|> UpdateContentCallbackQuary <$> o .: "callback_query"
   parseJSON _ = mzero
 
 --type for a Telegram update
