@@ -15,8 +15,11 @@ type RT m = ReaderT (Env m) m
 data Env m = Env
     {
           logMessage   :: Logger (RT m)
-        , logged       :: TVar Text
-        , latestUpdate :: TVar Int
+        
     }
 
-instance HasLogger (RT m) (Env m) where
+instance (Monad m) => HasLogger (RT m) (Env m) where
+    getLogger = logMessage
+
+instance HasLoggerLevel (Env m) where
+    getLoggerLevel = undefined 

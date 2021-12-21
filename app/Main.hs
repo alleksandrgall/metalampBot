@@ -22,6 +22,7 @@ import Data.Function ((&))
 import Control.Exception (throwIO)
 import Data.Either (isLeft)
 import Data.Kind (Type)
+import Env.Persistence
 
 type Method = T.Text
 

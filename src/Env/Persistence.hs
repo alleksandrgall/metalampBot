@@ -1,4 +1,4 @@
-module Persistence where
+module Env.Persistence where
 import           Control.Concurrent.STM (TVar)
 import           Data.Text              (Text)
 import           Logger                 (LogLevel)
