@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE DefaultSignatures #-}
 module Logger.Logger
 
 where
@@ -21,6 +22,8 @@ class (Monad m) => HasLog m env | env -> m where
 
 class Monad m => MonadLog m where 
     log :: Logger m
+    default log :: (MonadTrans t, MonadLog m1, t m1 ~ m) => Logger m
+    log lvl msg = lift $ log lvl msg 
     logDebug :: Text -> m ()
     logDebug = log Debug
     logInfo :: Text -> m ()
@@ -41,3 +44,4 @@ instance (HasLog m env, HasLogLevel env) => MonadLog (ReaderT env m) where
         envLogger <- asks getLog
         envLevel <- asks getLogLevel
         when (lvl >= envLevel) (lift $ envLogger lvl msg) 
+
