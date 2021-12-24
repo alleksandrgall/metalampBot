@@ -27,8 +27,11 @@ library
   exposed-modules:
       Bot.API
       Bot.ResponseTypes
+      Bot.Telegram.ResponseTypes
       Config
       Env
+      Env.Env
+      Env.Persistence
       Logger
       Logger.Logger
   other-modules:
@@ -40,6 +43,7 @@ library
       OverloadedStrings
       DeriveGeneric
       GADTs
+      BlockArguments
   build-depends:
       aeson
     , base >=4.7 && <5
@@ -76,6 +80,7 @@ test-suite metaLampBot-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Test
       Paths_metaLampBot
   hs-source-dirs:
       test
