@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 -- | This module will contain generalized response types
+-- it is supposed to be imported via qualified 
 module Bot.Telegram.ResponseTypes where
 
 import           Control.Applicative (Alternative ((<|>)))
