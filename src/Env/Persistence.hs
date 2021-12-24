@@ -9,5 +9,6 @@ type Token = Text
 data Persistance m = Persistance
     {
         logLevel     :: LogLevel,
-        latestUpdate :: TVar Int
+        latestUpdate :: TVar Int,
+        token :: Token
     }

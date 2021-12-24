@@ -27,6 +27,7 @@ library
   exposed-modules:
       Bot.API
       Bot.ResponseTypes
+      Bot.Telegram.ResponseTypes
       Config
       Env
       Env.Env
