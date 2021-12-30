@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module Config
     -- ( AppConfig (..),
     --   Messenger(..),
@@ -14,8 +15,10 @@ import           Conferer.Source.PropertiesFile as Prop (fromConfig)
 import           Data.Text                      (Text, empty, toLower)
 import           GHC.Generics                   (Generic)
 
-import           Logger
-import Env.Persistence
+import           Handlers.Logger                (LogLevel (..))
+
+data Messenger = Tele | VK deriving (Show)
+type Token = String
 instance FromConfig Messenger where
     fromConfig = fetchFromConfigWith (\s -> case toLower s of
         "vk"       -> Just VK
@@ -70,4 +73,3 @@ instance DefaultConfig AppConfig where
 
 fetchConfig :: IO AppConfig
 fetchConfig = fetch =<< mkConfig' [] [CLI.fromConfig, Prop.fromConfig "local", Files.fromFilePath "./config/bot.properties"]
-

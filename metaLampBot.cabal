@@ -29,11 +29,8 @@ library
       Bot.ResponseTypes
       Bot.Telegram.ResponseTypes
       Config
-      Env
-      Env.Env
-      Env.Persistence
-      Logger
-      Logger.Logger
+      Handlers.Logger
+      Handlers.Web
   other-modules:
       Paths_metaLampBot
   hs-source-dirs:
@@ -44,6 +41,7 @@ library
       DeriveGeneric
       GADTs
       BlockArguments
+      RecordWildCards
   build-depends:
       aeson
     , base >=4.7 && <5

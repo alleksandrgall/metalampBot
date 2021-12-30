@@ -38,6 +38,7 @@ library:
     - DeriveGeneric
     - GADTs
     - BlockArguments
+    - RecordWildCards
 
 executables:
   metaLampBot-exe:
