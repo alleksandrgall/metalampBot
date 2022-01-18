@@ -2,7 +2,7 @@
 
 -- | This module will contain generalized response types
 -- it is supposed to be imported via qualified 
-module Bot.Telegram.ResponseTypes where
+module Bot.Telegram.Internal.ResponseTypes where
 
 import           Control.Applicative (Alternative ((<|>)))
 import           Control.Monad       (MonadPlus (mzero))
@@ -14,11 +14,12 @@ import           Data.Maybe          (fromJust)
 import           Data.String         (IsString (fromString))
 import           GHC.Generics        (Generic)
 import           GHC.Int             (Int64)
+import Data.Text (Text)
 
 -- | Type for a Telegram response
 data Response a = Response
   { responseOk          :: Bool,
-    responseDescription :: Maybe String,
+    responseDescription :: Maybe Text ,
     responseResult      :: Maybe a
   }
   deriving (Show, Generic)
@@ -29,11 +30,11 @@ instance FromJSON a => FromJSON (Response a) where
 -- | Type for a Telegram chat
 data Chat = Chat
   {   chatId        :: Int64
-    , chatType      :: String
-    , chatTitle     :: Maybe String
-    , chatUsername  :: Maybe String
-    , chatFirstName :: Maybe String
-    , chatLastName  :: Maybe String
+    , chatType      :: Text 
+    , chatTitle     :: Maybe Text 
+    , chatUsername  :: Maybe Text 
+    , chatFirstName :: Maybe Text 
+    , chatLastName  :: Maybe Text 
   }
   deriving (Show, Generic)
 
@@ -44,10 +45,10 @@ instance FromJSON Chat where
 data User = User
   {   userId          :: Int64
     , userIsBot       :: Bool
-    , userFirstName   :: String
-    , userLastName    :: Maybe String
-    , userUsername     :: Maybe String
-    , userLanguageCode :: Maybe String
+    , userFirstName   :: Text 
+    , userLastName    :: Maybe Text 
+    , userUsername     :: Maybe Text 
+    , userLanguageCode :: Maybe Text 
   }
   deriving (Show, Generic)
 
@@ -59,7 +60,7 @@ instance FromJSON User where
 type Photo = [PhotoSize]
 
 newtype PhotoSize = PhotoSize
-  { photoSizeFileId :: String
+  { photoSizeFileId :: Text 
   }
   deriving (Show, Generic)
 
@@ -68,7 +69,7 @@ instance FromJSON PhotoSize where
 
 -- | Type for a Telegram document
 newtype Document = Document
-  { documentFileId :: String
+  { documentFileId :: Text 
   }
   deriving (Show, Generic)
 
@@ -77,7 +78,7 @@ instance FromJSON Document where
 
 -- | Type for a Telegram sticker
 newtype Sticker = Sticker
-  { stickerFileId :: String
+  { stickerFileId :: Text 
   }
   deriving (Show, Generic)
 
@@ -85,7 +86,7 @@ instance FromJSON Sticker where
   parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "sticker"}
 
 -- | Sum type of all posible mutually exclusive MessageContent message can contain
-data MessageContent = MessageContentText String | MessageContentPhoto Photo | MessageContentDocument Document | MessageContentSticker Sticker
+data MessageContent = MessageContentText Text  | MessageContentPhoto Photo | MessageContentDocument Document | MessageContentSticker Sticker
   deriving (Show, Generic)
 
 instance FromJSON MessageContent where
@@ -102,7 +103,7 @@ data Message = Message
     , messageDate    :: Int
     , messageChat    :: Chat
     , messageContent :: MessageContent
-    , messageCaption :: Maybe String
+    , messageCaption :: Maybe Text 
   }
   deriving (Show, Generic)
 
@@ -115,9 +116,9 @@ instance FromJSON Message where
 
 -- | Type for a Telegram Callback quary returned after a button press
 data CallbackQuery = CallbackQuery
-  {   callBackQueryId   :: String
+  {   callBackQueryId   :: Text 
     , callBackQueryFrom :: User
-    , callBackQueryData :: String
+    , callBackQueryData :: Text 
   }
   deriving (Show, Generic)
 
