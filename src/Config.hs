@@ -40,7 +40,7 @@ data Repeat = Repeat {
 
 instance FromConfig Repeat
 
-data Help = Help {
+newtype Help = Help {
     helpMessage :: Text
 } deriving (Show, Generic)
 

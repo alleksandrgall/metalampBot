@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Logger 
+module Logger
     (  Logger.Config (..)
+     , MessageType
      , log
      , Handle
      , withHandle
@@ -12,37 +13,42 @@ module Logger
      ) where
 
 
-import Handlers.Logger as L
-import Data.Text.IO as T (putStrLn, appendFile, hPutStr)
-import Data.Text (append, pack)
-import Data.Function ((&))
-import Control.Monad (when)
-import Data.Maybe (isJust, fromJust)
-import System.IO hiding (Handle)
-import Prelude hiding (log, error)
-import Control.Exception (bracket)
+
+import           Control.Monad         (when)
+import qualified Data.ByteString.Char8 as B (hPutStrLn, putStrLn)
+import           Data.Function         ((&))
+import           Data.Maybe            (fromJust, isJust)
+import           Data.Text             (append, pack)
+import           Data.Text.IO          as T (appendFile, hPutStrLn, putStrLn)
+import           Handlers.Logger       as L
+import           Prelude               hiding (error, log)
+import qualified System.IO             as SIO
 
 data Config = Config {
-      cFilePath :: Maybe FilePath
+      cFilePath  :: Maybe FilePath
     , cToConsole :: Bool
-    , cLogLevel :: L.LogLevel
+    , cLogLevel  :: L.LogLevel
 }
 
 withHandle :: Logger.Config -> (L.Handle IO -> IO a) -> IO a
 withHandle c f = do
     if isJust $ c & cFilePath then
-        withFile (fromJust $ c & cFilePath) WriteMode
-            (\h -> do
-                let logHandle = L.Handle
-                        (L.Config $ c & cLogLevel)
-                        (\l t -> do
-                            when (c & cToConsole) (T.putStrLn $ msg l t)
-                            hIsWritable h >>= flip when (T.hPutStr h $ msg l t))
-                f logHandle)
-    else do
-        let logHandle = L.Handle
-                        (L.Config $ c & cLogLevel)
-                        (\l t -> do
-                            when (c & cToConsole) (T.putStrLn $ msg l t))
-        f logHandle
-    where msg l t = (pack . show $ l) `append` ": " `append` t `append` "\n"
+        SIO.withFile (fromJust $ c & cFilePath) SIO.WriteMode
+            (\h -> f $ L.Handle
+                (L.Config $ c & cLogLevel)
+                (\l t -> do when (c & cToConsole) (printMsg l t)
+                            SIO.hIsWritable h >>= flip when (writeFileMsg l t h)))
+
+    else f $ L.Handle (L.Config $ c & cLogLevel) (\l t -> when (c & cToConsole) (printMsg l t))
+    where
+        msg l t = (pack . show $ l) `append` ": " `append` t
+        printMsg :: LogLevel -> MessageType -> IO ()
+        printMsg l (JustText t) = T.putStrLn $ msg l t
+        printMsg l (WithBs t bs) = do
+             T.putStrLn $ msg l t
+             B.putStrLn bs
+        writeFileMsg :: LogLevel -> MessageType -> SIO.Handle -> IO ()
+        writeFileMsg l (JustText t) h = T.hPutStrLn h $ msg l t
+        writeFileMsg l (WithBs t bs) h = do
+            T.hPutStrLn h $ msg l t
+            B.hPutStrLn h bs
