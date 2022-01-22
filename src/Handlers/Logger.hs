@@ -9,10 +9,10 @@ module Handlers.Logger
   , warning
   , error) where
 
-import           Data.Function ((&))
-import           Data.Text     (Text)
-import           Prelude       hiding (error, log)
-import Data.ByteString.Char8
+import           Data.ByteString.Lazy.Char8 (ByteString)
+import           Data.Function         ((&))
+import           Data.Text             (Text)
+import           Prelude               hiding (error, log)
 
 
 data LogLevel = Debug | Info | Warning | Error deriving (Show, Eq, Ord)
@@ -26,7 +26,7 @@ data Handle m = Handle
 
     }
 
-data Config = Config
+newtype Config = Config
     {
       cDefaultLogLevel :: LogLevel
     }
