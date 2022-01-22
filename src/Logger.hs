@@ -15,10 +15,10 @@ module Logger
 
 
 import           Control.Monad         (when)
-import qualified Data.ByteString.Char8 as B (hPutStrLn, putStrLn)
+import qualified Data.ByteString.Lazy.Char8 as B (hPutStrLn, putStrLn)
 import           Data.Function         ((&))
 import           Data.Maybe            (fromJust, isJust)
-import           Data.Text             (append, pack)
+import           Data.Text             (pack)
 import           Data.Text.IO          as T (appendFile, hPutStrLn, putStrLn)
 import           Handlers.Logger       as L
 import           Prelude               hiding (error, log)
@@ -41,7 +41,7 @@ withHandle c f = do
 
     else f $ L.Handle (L.Config $ c & cLogLevel) (\l t -> when (c & cToConsole) (printMsg l t))
     where
-        msg l t = (pack . show $ l) `append` ": " `append` t
+        msg l t = (pack . show $ l) <> ": " <> t
         printMsg :: LogLevel -> MessageType -> IO ()
         printMsg l (JustText t) = T.putStrLn $ msg l t
         printMsg l (WithBs t bs) = do
