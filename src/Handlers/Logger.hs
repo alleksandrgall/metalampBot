@@ -23,7 +23,6 @@ data Handle m = Handle
     {
       hConfig     :: Config
     , hLogMessage :: LogLevel -> MessageType -> m ()
-
     }
 
 newtype Config = Config

@@ -15,9 +15,9 @@ import           Data.Text                      (Text, empty, toLower)
 import           GHC.Generics                   (Generic)
 
 import           Handlers.Logger                (LogLevel (..))
+import           Internal.Types                 (Token)
 
 data Messenger = Tele | VK deriving (Show)
-type Token = String
 instance FromConfig Messenger where
     fromConfig = fetchFromConfigWith (\s -> case toLower s of
         "vk"       -> Just VK
