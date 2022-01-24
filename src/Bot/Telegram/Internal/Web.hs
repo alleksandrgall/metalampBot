@@ -1,9 +1,10 @@
 module Bot.Telegram.Internal.Web where
 
-import Network.HTTP.Req
-import Config
-import qualified Logger as L
+import           Config
+import           Internal.Types   (Token)
+import qualified Logger           as L
+import           Network.HTTP.Req
 
 
 init :: L.Handle IO -> Token -> IO ()
-init = undefined 
+init = undefined

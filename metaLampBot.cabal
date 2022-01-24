@@ -31,7 +31,10 @@ library
       Config
       Handlers.Logger
       Handlers.Web
+      Internal.Types
       Logger
+      Req.Internal
+      Req.Web
   other-modules:
       Paths_metaLampBot
   hs-source-dirs:
@@ -52,6 +55,7 @@ library
     , exceptions >=0.10.4
     , hspec
     , http-client
+    , http-types
     , mtl >=2.2.2
     , req
     , stm
@@ -74,6 +78,7 @@ executable metaLampBot-exe
     , exceptions >=0.10.4
     , hspec
     , http-client
+    , http-types
     , metaLampBot
     , mtl >=2.2.2
     , req
@@ -99,6 +104,7 @@ test-suite metaLampBot-test
     , exceptions >=0.10.4
     , hspec
     , http-client
+    , http-types
     , metaLampBot
     , mtl >=2.2.2
     , req
