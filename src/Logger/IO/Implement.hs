@@ -1,15 +1,5 @@
-{-# LANGUAGE OverloadedStrings #-}
-module Logger
-    (  Logger.Config (..)
-     , MessageType
-     , log
-     , Handle
+module Logger.IO.Implement    (  Config (..)
      , withHandle
-     , LogLevel
-     , debug
-     , info
-     , warning
-     , error
      ) where
 
 
@@ -23,7 +13,7 @@ import           Data.Maybe                 (fromJust, isJust)
 import           Data.Text                  (pack)
 import           Data.Text.IO               as T (appendFile, hPutStrLn,
                                                   putStrLn)
-import           Handlers.Logger            as L
+import qualified Handlers.Logger            as L
 import           Prelude                    hiding (error, log)
 import qualified System.IO                  as SIO
 
@@ -33,7 +23,7 @@ data Config = Config {
     , cLogLevel  :: L.LogLevel
 }
 
-withHandle :: (MonadIO m, MonadMask m) => Logger.Config -> (L.Handle m -> m a) -> m a
+withHandle :: (MonadIO m, MonadMask m) => Config -> (L.Handle m -> m a) -> m a
 withHandle c f = do
     if isJust $ c & cFilePath then
         bracket
@@ -48,13 +38,13 @@ withHandle c f = do
     else f $ L.Handle (L.Config $ c & cLogLevel) (\l t -> liftIO $ when (c & cToConsole) (printMsg l t))
     where
         msg l t = (pack . show $ l) <> ": " <> t
-        printMsg :: LogLevel -> MessageType -> IO ()
-        printMsg l (JustText t) = T.putStrLn $ msg l t
-        printMsg l (WithBs t bs) = do
+        printMsg :: L.LogLevel -> L.MessageType -> IO ()
+        printMsg l (L.JustText t) = T.putStrLn $ msg l t
+        printMsg l (L.WithBs t bs) = do
              T.putStrLn $ msg l t
              B.putStrLn bs
-        writeFileMsg :: LogLevel -> MessageType -> SIO.Handle -> IO ()
-        writeFileMsg l (JustText t) h = T.hPutStrLn h $ msg l t
-        writeFileMsg l (WithBs t bs) h = do
+        writeFileMsg :: L.LogLevel -> L.MessageType -> SIO.Handle -> IO ()
+        writeFileMsg l (L.JustText t) h = T.hPutStrLn h $ msg l t
+        writeFileMsg l (L.WithBs t bs) h = do
             T.hPutStrLn h $ msg l t
             B.hPutStrLn h bs

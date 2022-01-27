@@ -1,4 +1,6 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE RankNTypes           #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Handlers.Web
     (Config(..)
     ,Handle(..)
@@ -20,12 +22,15 @@ import           Data.Function        ((&))
 import           Data.Maybe           (fromJust, fromMaybe)
 import           Data.String          (IsString (fromString))
 import           Data.Text            (Text, pack)
-import           Exceptions.Body
-import           Exceptions.Parse
-import           Exceptions.Web
+import           Exceptions.Body      (BodyException (..))
+import           Exceptions.Parse     (ParseException (..))
+import           Exceptions.Web       (WebException (..))
 import qualified Handlers.Logger      as L
 import           Internal.Types       (Token, Url)
 import           Network.HTTP.Client  (ManagerSettings, defaultManagerSettings)
+import           Network.HTTP.Req     (BsResponse, HttpResponse, LbsResponse,
+                                       responseBody, responseStatusCode,
+                                       responseStatusMessage)
 import           Prelude              hiding (error)
 
 -- | Config for Web.Handler
@@ -45,6 +50,10 @@ class Result a where
     getDescription :: a -> Text
     getBody :: a -> B.ByteString
 
+instance Result LbsResponse  where
+  getCode        = responseStatusCode
+  getDescription = pack . show . responseStatusMessage
+  getBody        = responseBody
 
 data Handle a m = Handle {
     hConfig      :: Config
