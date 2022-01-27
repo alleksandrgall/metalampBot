@@ -2,9 +2,12 @@
 module Handlers.Web
     (Config(..)
     ,Handle(..)
-    ,WebException(..)
     ,ParseException(..)
-    ,makeRequest)
+    ,Result
+    ,makeRequest
+    ,getCode
+    ,getBody
+    ,getDescription)
     where
 
 
@@ -38,7 +41,6 @@ data Config = Config {
 }
 
 class Result a where
-    getOk :: a -> Bool
     getCode :: a -> Int
     getDescription :: a -> Text
     getBody :: a -> B.ByteString
@@ -50,7 +52,7 @@ data Handle a m = Handle {
   -- | Main function for making requests.
   --
   -- Can throw WebException
-  , hMakeRequest :: (Result a, MonadThrow m) => ManagerSettings -> Url -> Token -> Text -> [(Text, Text)] -> m a
+  , hMakeRequest :: (Result a, MonadThrow m) => Maybe ManagerSettings -> Url -> Token -> Text -> [(Text, Text)] -> m a
 }
 
 -- | Exception type which makeRequest throws into the bot's logic
@@ -63,7 +65,7 @@ instance Exception RequestException where
 makeRequest :: (FromJSON a, MonadCatch m, Result b) => Handle b m -> Text -> [(Text, Text)] -> m a
 makeRequest h@Handle {..} method params = do
     resp <- handleWebException hLogger (hConfig & cUrl) method $ hMakeRequest
-        (fromMaybe defaultManagerSettings $ hConfig & cManagerSettings)
+        (hConfig & cManagerSettings)
         (hConfig & cUrl)
         (hConfig & cToken)
         method
@@ -72,12 +74,11 @@ makeRequest h@Handle {..} method params = do
         "\nCode: " <> (pack . show $ resp & getCode) <>
         "\nDescription: " <> (resp & getDescription) <>
         "\nBody: ") (resp & getBody)
-    if not (resp & getOk) && (mempty == (resp & getBody)) then do
+    if mempty == (resp & getBody) then do
         L.error hLogger $ L.JustText $ "Response was got but body is empty" <> (hConfig & cUrl) <> method <>
             "\nCode: " <> (pack . show $ resp & getCode) <>
             "\nDescription: " <> (resp & getDescription)
         throwM $ toException . RBodyException . EmptyReponseBody  $ "\nCode: " <> (pack . show $ resp & getCode) <> "\nDescription: " <> (resp & getDescription)
-
     else case eitherDecode (resp & getBody) of
         Right body -> return body
         Left e         -> do
@@ -96,8 +97,7 @@ handleWebException hLogger url method = handle $ \e -> do
         toSome = toException . RWebException . fromJust
     case maybeWebException of
         Just NoResponse -> L.error hLogger (L.JustText $ "No response from " <> url)
-
-        -- to do 3XX
+        -- maybe todo 3XX
         Just (CodeMessageException c t) -> L.error hLogger (L.JustText $ "Server answered with an error: " <> (pack . show $ c) <> ". Desctiption: " <> t)
         Just (ConnectionException t) -> L.error hLogger (L.JustText $ "Unnable to connect: " <> t)
         Just (InvalidUrlException url msg) -> L.error hLogger (L.JustText $ "Url is invalid: " <> url <> ", error: " <> msg)

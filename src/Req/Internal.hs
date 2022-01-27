@@ -5,26 +5,28 @@ import qualified Data.ByteString.Lazy   as B
 import           Data.Text              (Text, pack)
 import           Internal.Types         (Token)
 import           Network.HTTP.Client    (ManagerSettings)
-import           Network.HTTP.Req       (GET (GET), NoReqBody (NoReqBody),
-                                         QueryParam, defaultHttpConfig, https,
-                                         lbsResponse, req, responseBody,
-                                         responseStatusCode,
-                                         responseStatusMessage, runReq, (/:),
-                                         (=:))
+import           Network.HTTP.Req       (GET (GET), LbsResponse,
+                                         NoReqBody (NoReqBody), QueryParam,
+                                         defaultHttpConfig, https, lbsResponse,
+                                         req, runReq, (/:), (=:))
 
-
-
-makeRequestReq :: (MonadThrow m, MonadIO m) => ManagerSettings -> Text -> Token -> Text -> [(Text, Text)] -> m B.ByteString
+-- | Function to make requests using Network.HTTP.Req library
+--
+-- | Can throw Exceptions from Network.HTTP.Client
+makeRequestReq :: (MonadThrow m, MonadIO m) =>
+    Maybe ManagerSettings ->
+    Text -> -- | base api url
+    Token ->
+    Text -> -- | method
+    [(Text, Text)] -> -- | method params
+    m LbsResponse
 makeRequestReq _ url token method params = do
-    rs <- runReq defaultHttpConfig (req
+    runReq defaultHttpConfig (req
         GET
         builtUrl
         NoReqBody
         lbsResponse
         queryParams)
-    -- case (responseStatusCode rs, responseStatusMessage rs, responseBody rs) of
-
-    return (responseBody rs)
     where
         builtUrl = https url /: pack ("bot" ++ token) /: method
         queryParams :: (QueryParam p, Monoid p) => p
