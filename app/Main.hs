@@ -11,7 +11,8 @@ import           Data.Int                            (Int64)
 import           Data.Map                            as M
 import           Data.Text                           (Text, pack)
 import qualified Data.Text                           as T
-import qualified Logger                              as L
+import qualified Logger.IO                           as L
+import qualified Handlers.Logger                     as L
 import           Network.HTTP.Client                 (HttpException (HttpExceptionRequest, InvalidUrlException),
                                                       HttpExceptionContent (..),
                                                       Response (responseStatus))

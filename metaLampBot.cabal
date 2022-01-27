@@ -25,9 +25,7 @@ source-repository head
 
 library
   exposed-modules:
-      Bot.API
       Bot.Telegram.Internal.ResponseTypes
-      Bot.Telegram.Internal.Web
       Config
       Exceptions.Body
       Exceptions.Parse
@@ -35,9 +33,11 @@ library
       Handlers.Logger
       Handlers.Web
       Internal.Types
-      Logger
-      Req.Internal
-      Req.Web
+      Logger.IO
+      Logger.IO.Implement
+      Web.Req
+      Web.Req.Implement
+      Web.Req.Internal
   other-modules:
       Paths_metaLampBot
   hs-source-dirs:

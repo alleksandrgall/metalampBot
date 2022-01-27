@@ -1,5 +1,8 @@
 
-module Req.Web where
+module Web.Req.Implement
+  (Config(..)
+  ,withHandle)
+where
 
 import           Control.Monad.Catch    (MonadThrow)
 import           Control.Monad.IO.Class (MonadIO)
@@ -11,18 +14,13 @@ import           Internal.Types         (Token)
 import           Network.HTTP.Req       (LbsResponse, responseBody,
                                          responseStatusCode,
                                          responseStatusMessage)
-import           Req.Internal           (makeRequestReq)
+import           Web.Req.Internal       (makeRequestReq)
 
 
 data Config = Config {
     cToken :: Token
   , cUrl   :: Text
 }
-
-instance Web.Result LbsResponse where
-  getCode        = responseStatusCode
-  getDescription = pack . show . responseStatusMessage
-  getBody        = responseBody
 
 withHandle :: (MonadIO m, MonadThrow m) => Config -> L.Handle m -> (Web.Handle LbsResponse m -> m a) -> m a
 withHandle Config{..} hL f =

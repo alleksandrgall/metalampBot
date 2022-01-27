@@ -1,4 +1,4 @@
-module Req.Internal where
+module Web.Req.Internal where
 import           Control.Monad.Catch    (MonadThrow, throwM)
 import           Control.Monad.IO.Class (MonadIO)
 import qualified Data.ByteString.Lazy   as B
