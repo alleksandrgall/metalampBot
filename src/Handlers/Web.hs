@@ -4,23 +4,26 @@ module Handlers.Web
     ,Handle(..)
     ,WebException(..)
     ,ParseException(..)
-    ,Token
     ,makeRequest)
     where
 
-import           Control.Monad.Catch        (Exception, MonadCatch (catch),
-                                             MonadThrow (throwM), handle)
-import           Data.Aeson                 (FromJSON, eitherDecode)
-import qualified Data.ByteString.Lazy.Char8 as B
-import           Data.Function              ((&))
-import           Data.Maybe                 (fromMaybe)
-import           Data.String                (IsString (fromString))
-import           Data.Text                  as T (Text)
-import qualified Handlers.Logger            as L
-import           Internal.Types             (Token, Url)
-import           Network.HTTP.Client        (ManagerSettings,
-                                             defaultManagerSettings)
-import           Prelude                    hiding (error)
+
+import           Control.Monad.Catch  (Exception, MonadCatch,
+                                       MonadThrow (throwM), fromException,
+                                       handle, toException)
+import           Data.Aeson           (FromJSON, eitherDecode)
+import qualified Data.ByteString.Lazy as B
+import           Data.Function        ((&))
+import           Data.Maybe           (fromJust, fromMaybe)
+import           Data.String          (IsString (fromString))
+import           Data.Text            (Text, pack)
+import           Exceptions.Body
+import           Exceptions.Parse
+import           Exceptions.Web
+import qualified Handlers.Logger      as L
+import           Internal.Types       (Token, Url)
+import           Network.HTTP.Client  (ManagerSettings, defaultManagerSettings)
+import           Prelude              hiding (error)
 
 -- | Config for Web.Handler
 --
@@ -34,58 +37,73 @@ data Config = Config {
   , cUrl             :: Text
 }
 
-data Handle m = Handle {
+class Result a where
+    getOk :: a -> Bool
+    getCode :: a -> Int
+    getDescription :: a -> Text
+    getBody :: a -> B.ByteString
+
+
+data Handle a m = Handle {
     hConfig      :: Config
   , hLogger      :: L.Handle m
   -- | Main function for making requests.
   --
   -- Can throw WebException
-  , hMakeRequest :: (MonadThrow m) => ManagerSettings -> Url -> Token -> Text -> [(Text, Text)] -> m B.ByteString
+  , hMakeRequest :: (Result a, MonadThrow m) => ManagerSettings -> Url -> Token -> Text -> [(Text, Text)] -> m a
 }
 
-
--- | Exception type which hMakeRequest could throw
-data WebException = CodeMessageException Int Text | NoResponse | EmptyReponseBody Text | SomeWebException
-    deriving (Show)
-instance Exception WebException
-
--- | Exception type for parse error
-newtype ParseException = WrongType Text
-    deriving (Show)
-instance Exception ParseException
-
 -- | Exception type which makeRequest throws into the bot's logic
-data ResponseException = RWebException WebException | RParseException ParseException
+data RequestException = RWebException WebException | RParseException ParseException | RBodyException BodyException
     deriving (Show)
-instance Exception ResponseException
+instance Exception RequestException where
+
 
 -- | Function for making requests, parsing them and throwing exceptions
-makeRequest :: (FromJSON a, Show a, MonadCatch m) => Handle m -> Text -> [(Text, Text)] -> m a
+makeRequest :: (FromJSON a, MonadCatch m, Result b) => Handle b m -> Text -> [(Text, Text)] -> m a
 makeRequest h@Handle {..} method params = do
-    bs <- handleWebException h (hConfig & cUrl) method $ hMakeRequest
+    resp <- handleWebException hLogger (hConfig & cUrl) method $ hMakeRequest
         (fromMaybe defaultManagerSettings $ hConfig & cManagerSettings)
         (hConfig & cUrl)
         (hConfig & cToken)
         method
         params
-    L.info hLogger $ L.WithBs ("Got response " <> (hConfig & cUrl) <> method) bs
-    case eitherDecode bs of
-        Right response -> return response
+    L.info hLogger $ L.WithBs ("Got response " <> (hConfig & cUrl) <> method <>
+        "\nCode: " <> (pack . show $ resp & getCode) <>
+        "\nDescription: " <> (resp & getDescription) <>
+        "\nBody: ") (resp & getBody)
+    if not (resp & getOk) && (mempty == (resp & getBody)) then do
+        L.error hLogger $ L.JustText $ "Response was got but body is empty" <> (hConfig & cUrl) <> method <>
+            "\nCode: " <> (pack . show $ resp & getCode) <>
+            "\nDescription: " <> (resp & getDescription)
+        throwM $ toException . RBodyException . EmptyReponseBody  $ "\nCode: " <> (pack . show $ resp & getCode) <> "\nDescription: " <> (resp & getDescription)
+
+    else case eitherDecode (resp & getBody) of
+        Right body -> return body
         Left e         -> do
             L.error hLogger (L.JustText $ "Parsing failed due to mismatching type, error:\n\t" <> fromString e)
-            throwM $ RParseException . WrongType . fromString $ e
+            throwM $ toException . RParseException . WrongType . fromString $ e
 
 
 
 
 -- | Just rethrowing exceptions for bot logic to deal with
-handleWebException :: (MonadCatch m) => Handle m -> Url -> Text -> m a -> m a
-handleWebException h url method = handle $ \e -> case e of
-    NoResponse -> do
-        L.error (h & hLogger) (L.JustText $ "No response from " <> url)
-        throwM (RWebException e)
-    EmptyReponseBody t -> do
-        L.error (h & hLogger) (L.JustText $ "Response from " <> url <> " was got but body was empty, error:\n\t" <> t)
-        throwM (RWebException e)
-    SomeWebException -> throwM (RWebException e)
-    CodeMessageException c t -> throwM (RWebException e)
+--
+-- Написать через fromException и выкидывать через toException
+handleWebException :: (MonadCatch m) => L.Handle m -> Url -> Text -> m a -> m a
+handleWebException hLogger url method = handle $ \e -> do
+    let maybeWebException = fromException e
+        toSome = toException . RWebException . fromJust
+    case maybeWebException of
+        Just NoResponse -> L.error hLogger (L.JustText $ "No response from " <> url)
+
+        -- to do 3XX
+        Just (CodeMessageException c t) -> L.error hLogger (L.JustText $ "Server answered with an error: " <> (pack . show $ c) <> ". Desctiption: " <> t)
+        Just (ConnectionException t) -> L.error hLogger (L.JustText $ "Unnable to connect: " <> t)
+        Just (InvalidUrlException url msg) -> L.error hLogger (L.JustText $ "Url is invalid: " <> url <> ", error: " <> msg)
+        Just (SomeWebException se) -> L.error hLogger (L.JustText $ "Web exception was caught: " <> (pack . show $ se))
+        Nothing -> L.error hLogger (L.JustText $ "Web exception was caught: " <> (pack . show $ e)) >> throwM e
+    throwM (toSome maybeWebException)
+
+
+
