@@ -30,6 +30,7 @@ library
       Exceptions.Body
       Exceptions.Parse
       Exceptions.Web
+      Handlers.Bot
       Handlers.Logger
       Handlers.Web
       Internal.Types

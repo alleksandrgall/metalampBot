@@ -14,7 +14,7 @@ import           Internal.Types         (Token)
 import           Network.HTTP.Req       (LbsResponse, responseBody,
                                          responseStatusCode,
                                          responseStatusMessage)
-import           Web.Req.Internal       (makeRequestReq)
+import           Web.Req.Internal       (sendRequestReq)
 
 
 data Config = Config {
@@ -27,4 +27,4 @@ withHandle Config{..} hL f =
   f $ Web.Handle
     (Web.Config Nothing cToken cUrl)
     hL
-    makeRequestReq
+    sendRequestReq

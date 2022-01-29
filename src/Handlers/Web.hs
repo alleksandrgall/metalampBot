@@ -60,8 +60,8 @@ data Handle a m = Handle {
   , hLogger      :: L.Handle m
   -- | Main function for making requests.
   --
-  -- Can throw WebException
-  , hMakeRequest :: (Result a, MonadThrow m) => Maybe ManagerSettings -> Url -> Token -> Text -> [(Text, Text)] -> m a
+  -- Can throw WebException or SomeException with HttpException inside
+  , hSendRequest :: (Result a, MonadThrow m) => Maybe ManagerSettings -> Url -> Token -> Text -> [(Text, Text)] -> m a
 }
 
 -- | Exception type which makeRequest throws into the bot's logic
@@ -70,10 +70,12 @@ data RequestException = RWebException WebException | RParseException ParseExcept
 instance Exception RequestException where
 
 
--- | Function for making requests, parsing them and throwing exceptions
+-- | Function for making requests and parsing them
+--
+-- | Throws RequestException
 makeRequest :: (FromJSON a, MonadCatch m, Result b) => Handle b m -> Text -> [(Text, Text)] -> m a
 makeRequest h@Handle {..} method params = do
-    resp <- handleWebException hLogger (hConfig & cUrl) method $ hMakeRequest
+    resp <- handleWebException hLogger (hConfig & cUrl) method $ hSendRequest
         (hConfig & cManagerSettings)
         (hConfig & cUrl)
         (hConfig & cToken)
@@ -87,32 +89,41 @@ makeRequest h@Handle {..} method params = do
         L.error hLogger $ L.JustText $ "Response was got but body is empty" <> (hConfig & cUrl) <> method <>
             "\nCode: " <> (pack . show $ resp & getCode) <>
             "\nDescription: " <> (resp & getDescription)
-        throwM $ toException . RBodyException . EmptyReponseBody  $ "\nCode: " <> (pack . show $ resp & getCode) <> "\nDescription: " <> (resp & getDescription)
+        throwM $ RBodyException . EmptyReponseBody  $ "\nCode: " <> (pack . show $ resp & getCode) <> "\nDescription: " <> (resp & getDescription)
     else case eitherDecode (resp & getBody) of
         Right body -> return body
-        Left e         -> do
-            L.error hLogger (L.JustText $ "Parsing failed due to mismatching type, error:\n\t" <> fromString e)
-            throwM $ toException . RParseException . WrongType . fromString $ e
+        Left e     -> do
+            L.error hLogger $ L.WithBs ("Parsing failed due to mismatching type, error:\n\t" <> fromString e) (resp & getBody)
+            throwM $ RParseException . WrongType . fromString $ e
 
 
 
 
--- | Just rethrowing exceptions for bot logic to deal with
---
--- Написать через fromException и выкидывать через toException
+-- | Just rethrowing exceptions in the form of WebException for the bot logic to deal with
 handleWebException :: (MonadCatch m) => L.Handle m -> Url -> Text -> m a -> m a
-handleWebException hLogger url method = handle $ \e -> do
-    let maybeWebException = fromException e
-        toSome = toException . RWebException . fromJust
-    case maybeWebException of
-        Just NoResponse -> L.error hLogger (L.JustText $ "No response from " <> url)
-        -- maybe todo 3XX
-        Just (CodeMessageException c t) -> L.error hLogger (L.JustText $ "Server answered with an error: " <> (pack . show $ c) <> ". Desctiption: " <> t)
-        Just (ConnectionException t) -> L.error hLogger (L.JustText $ "Unnable to connect: " <> t)
-        Just (InvalidUrlException url msg) -> L.error hLogger (L.JustText $ "Url is invalid: " <> url <> ", error: " <> msg)
-        Just (SomeWebException se) -> L.error hLogger (L.JustText $ "Web exception was caught: " <> (pack . show $ se))
-        Nothing -> L.error hLogger (L.JustText $ "Web exception was caught: " <> (pack . show $ e)) >> throwM e
-    throwM (toSome maybeWebException)
+handleWebException hLogger url method = handleFromException . handlePure
+    where
+        logException NoResponse = L.error hLogger (L.JustText $ "No response from " <> url)
+        logException (CodeMessageException c t) = L.error hLogger (L.JustText $ "Server answered with an error: " <> (pack . show $ c) <> ". Desctiption: " <> t)
+        logException (ConnectionException t) = L.error hLogger (L.JustText $ "Unnable to connect: " <> t)
+        logException (InvalidUrlException url msg) = L.error hLogger (L.JustText $ "Url is invalid: " <> url <> ", error: " <> msg)
+        logException (SomeWebException se) = L.error hLogger (L.JustText $ "Web exception was caught: " <> (pack . show $ se))
+
+        handlePure = handle $ \e -> do
+            logException e
+            throwM $ RWebException e
+
+        handleFromException = handle $ \e -> do
+            let maybeWebException = fromException e
+            case maybeWebException of
+                Just webE -> do
+                    logException webE
+                    throwM $ RWebException webE
+                -- In case of parse fromException failing throws SomeException
+                Nothing -> throwM e
+
+
+
 
 
 
