@@ -6,6 +6,7 @@ where
 
 import           Control.Monad.Catch    (MonadThrow)
 import           Control.Monad.IO.Class (MonadIO)
+import           Data.Aeson             (ToJSON)
 import qualified Data.ByteString.Lazy   as B
 import           Data.Text              (Text, pack)
 import qualified Handlers.Logger        as L
@@ -22,7 +23,7 @@ data Config = Config {
   , cUrl   :: Text
 }
 
-withHandle :: (MonadIO m, MonadThrow m) => Config -> L.Handle m -> (Web.Handle LbsResponse m -> m a) -> m a
+withHandle :: (MonadIO m, MonadThrow m, ToJSON b) => Config -> L.Handle m -> (Web.Handle m LbsResponse b -> m a) -> m a
 withHandle Config{..} hL f =
   f $ Web.Handle
     (Web.Config Nothing cToken cUrl)

@@ -1,26 +1,31 @@
-{-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 import           Bot.Telegram.Internal.ResponseTypes
 import           Config
 import           Control.Concurrent.STM              (TVar, newTVarIO)
 import           Control.Monad.Catch
-import qualified Data.ByteString.Char8               as B
+import           Data.Aeson                          (KeyValue ((.=)), ToJSON,
+                                                      Value (String), encode,
+                                                      object, toJSONList)
+import           Data.Aeson.Types                    (ToJSON (toJSON))
+import qualified Data.ByteString.Lazy                as B
 import           Data.Function                       ((&))
 import           Data.Int                            (Int64)
-import           Data.Map                            as M
+import qualified Data.Map                            as M
 import           Data.Text                           (Text, pack)
 import qualified Data.Text                           as T
+import           GHC.Generics                        (Generic)
+import qualified Handlers.Web                        as WH
 import qualified Logger.IO                           as L
-import qualified Handlers.Logger                     as L
-import           Network.HTTP.Client                 (HttpException (HttpExceptionRequest, InvalidUrlException),
-                                                      HttpExceptionContent (..),
-                                                      Response (responseStatus))
+
+import qualified Handlers.Logger                     as LH
 import           Network.HTTP.Req
 import           Network.HTTP.Types.Status
+import qualified Web.Req                             as W
 
 
-type NumberOfRepeats = Map Int64 Int
+type NumberOfRepeats = M.Map Int64 Int
 
 data Config = Config {
     cHelpMessage      :: T.Text
@@ -40,39 +45,18 @@ data Handle = Handle {
     , hAnswerCallBack           :: CallbackQuery -> Int64 -> IO ()
 }
 
-withHandle :: L.Handle IO -> AppConfig -> (Handle -> IO a) -> IO a
-withHandle hLog appConfig m = do
-  let myConfig = Config
-        (appConfig & appConfigHelp & helpMessage) (appConfig & appConfigRepeat & repeatDefaultNumber) (appConfig & appConfigToken)
-  myOffset <- newTVarIO 0
-  --myNumberOfRepeats <- newTVarIO (M.fromList [])
 
-  return undefined
+newtype Keyboard = Keyboard [(Text, Text)] deriving (Generic)
+
+instance ToJSON Keyboard where
+  toJSON (Keyboard ls) = object ["reply_markup" .= object ["inline_keyboard" .= [map (\(name, dat) -> object [("text", String name), ("callback_data", String dat)]) ls]]]
+
+
 main = do
   appConfig <- fetchConfig
-  let builtUrl = https "api.telegram.org" /: pack ("bot" ++ (appConfig & appConfigToken)) /: "getUpdates"
-      queryParams :: (QueryParam p, Monoid p) => p
-      queryParams = mconcat $ fmap (uncurry (=:)) ([] :: [(Text, Text)])
-  resp <- catch (responseBody <$> runReq defaultHttpConfig (req
-      GET
-      builtUrl
-      NoReqBody
-      bsResponse
-      queryParams))
-      (\case
-        VanillaHttpException (HttpExceptionRequest rq eContent) ->
-          case eContent of
-            StatusCodeException rs bRs ->
-              do
-              putStrLn "Code"
-              print $ rs & responseStatus & statusCode
-              putStrLn "Message"
-              print $ rs & responseStatus & statusMessage
-              return bRs  -- server answered with anything but 2XX
-            other                    -> undefined
-        VanillaHttpException (InvalidUrlException url er) -> undefined
-        (JsonHttpException js) -> undefined
-        )
-  print "Body"
-  B.putStrLn resp
+  let k = Keyboard [("button1", "1"), ("button2", "2")]
+  L.withHandle (L.Config Nothing True L.Info) $ \l ->
+    W.withHandle (W.Config (appConfig & appConfigToken) "api.telegram.org") l $ \w -> do
+      (WH.makeRequest w (Just k) "sendMessage" [("chat_id", "646472939"), ("text", "keyboard")] :: IO (Response Message))
+      LH.info l $ LH.JustText "Gleb pidor"
   return ()

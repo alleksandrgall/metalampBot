@@ -23,6 +23,7 @@ data Config = Config {
     , cLogLevel  :: L.LogLevel
 }
 
+{-| Handle takes maybe file to write to, whether to write to console or not and loglevel -}
 withHandle :: (MonadIO m, MonadMask m) => Config -> (L.Handle m -> m a) -> m a
 withHandle c f = do
     if isJust $ c & cFilePath then
