@@ -16,7 +16,7 @@ module Handlers.Web
 import           Control.Monad.Catch  (Exception, MonadCatch,
                                        MonadThrow (throwM), fromException,
                                        handle, toException)
-import           Data.Aeson           (FromJSON, eitherDecode)
+import           Data.Aeson           (FromJSON, ToJSON, eitherDecode)
 import qualified Data.ByteString.Lazy as B
 import           Data.Function        ((&))
 import           Data.Maybe           (fromJust, fromMaybe)
@@ -55,13 +55,26 @@ instance Result LbsResponse  where
   getDescription = pack . show . responseStatusMessage
   getBody        = responseBody
 
-data Handle a m = Handle {
+data Handle m a b = Handle {
     hConfig      :: Config
   , hLogger      :: L.Handle m
-  -- | Main function for making requests.
-  --
-  -- Can throw WebException or SomeException with HttpException inside
-  , hSendRequest :: (Result a, MonadThrow m) => Maybe ManagerSettings -> Url -> Token -> Text -> [(Text, Text)] -> m a
+  {-| Main function for making requests.
+      Can throw WebException or SomeException with HttpException inside.
+
+      Type a is for a result of a request.
+
+      Type b is for a possible request body.
+      Since there is only one possibility (the keyboard) it doesn't hurt.
+  -}
+  , hSendRequest ::
+        (Result a, ToJSON b, MonadThrow m) =>
+        Maybe ManagerSettings
+        -> Maybe b
+        -> Url
+        -> Token
+        -> Text
+        -> [(Text, Text)]
+        -> m a
 }
 
 -- | Exception type which makeRequest throws into the bot's logic
@@ -73,23 +86,28 @@ instance Exception RequestException where
 -- | Function for making requests and parsing them
 --
 -- | Throws RequestException
-makeRequest :: (FromJSON a, MonadCatch m, Result b) => Handle b m -> Text -> [(Text, Text)] -> m a
-makeRequest h@Handle {..} method params = do
+makeRequest :: (FromJSON response, MonadCatch m, Result a, ToJSON b) => Handle m a b -> Maybe b -> Text -> [(Text, Text)] -> m response
+makeRequest h@Handle {..} maybeBody method params = do
     resp <- handleWebException hLogger (hConfig & cUrl) method $ hSendRequest
         (hConfig & cManagerSettings)
+        maybeBody
         (hConfig & cUrl)
         (hConfig & cToken)
         method
         params
-    L.info hLogger $ L.WithBs ("Got response " <> (hConfig & cUrl) <> method <>
-        "\nCode: " <> (pack . show $ resp & getCode) <>
-        "\nDescription: " <> (resp & getDescription) <>
-        "\nBody: ") (resp & getBody)
+    L.info hLogger $ L.WithBs
+        ("Got response from" <> (hConfig & cUrl) <> ", method: " <> method <>
+        "\n\tCode: " <> (pack . show $ resp & getCode) <>
+        "\n\tDescription: " <> (resp & getDescription) <>
+        "\n\tBody: ")
+        (resp & getBody)
     if mempty == (resp & getBody) then do
-        L.error hLogger $ L.JustText $ "Response was got but body is empty" <> (hConfig & cUrl) <> method <>
-            "\nCode: " <> (pack . show $ resp & getCode) <>
-            "\nDescription: " <> (resp & getDescription)
-        throwM $ RBodyException . EmptyReponseBody  $ "\nCode: " <> (pack . show $ resp & getCode) <> "\nDescription: " <> (resp & getDescription)
+        L.error hLogger $ L.JustText $
+            "Response was got but body is empty" <> (hConfig & cUrl) <> method <>
+            "\n\tCode: " <> (pack . show $ resp & getCode) <>
+            "\n\tDescription: " <> (resp & getDescription)
+        throwM $ RBodyException . EmptyReponseBody  $
+            "\nCode: " <> (pack . show $ resp & getCode) <> "\nDescription: " <> (resp & getDescription)
     else case eitherDecode (resp & getBody) of
         Right body -> return body
         Left e     -> do
