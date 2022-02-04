@@ -1,3 +1,0 @@
-module Bot.ResponseTypes where
-
- 

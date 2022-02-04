@@ -25,15 +25,20 @@ source-repository head
 
 library
   exposed-modules:
-      Bot.API
-      Bot.ResponseTypes
-      Bot.Telegram.ResponseTypes
+      Bot.Telegram.Internal.ResponseTypes
       Config
-      Env
-      Env.Env
-      Env.Persistence
-      Logger
-      Logger.Logger
+      Exceptions.Body
+      Exceptions.Parse
+      Exceptions.Web
+      Handlers.Bot
+      Handlers.Logger
+      Handlers.Web
+      Internal.Types
+      Logger.IO
+      Logger.IO.Implement
+      Web.Req
+      Web.Req.Implement
+      Web.Req.Internal
   other-modules:
       Paths_metaLampBot
   hs-source-dirs:
@@ -44,12 +49,17 @@ library
       DeriveGeneric
       GADTs
       BlockArguments
+      RecordWildCards
   build-depends:
       aeson
     , base >=4.7 && <5
     , bytestring
     , conferer >=1.1.0.0
+    , containers
+    , exceptions >=0.10.4
     , hspec
+    , http-client
+    , http-types
     , mtl >=2.2.2
     , req
     , stm
@@ -68,7 +78,11 @@ executable metaLampBot-exe
     , base >=4.7 && <5
     , bytestring
     , conferer >=1.1.0.0
+    , containers
+    , exceptions >=0.10.4
     , hspec
+    , http-client
+    , http-types
     , metaLampBot
     , mtl >=2.2.2
     , req
@@ -90,7 +104,11 @@ test-suite metaLampBot-test
     , base >=4.7 && <5
     , bytestring
     , conferer >=1.1.0.0
+    , containers
+    , exceptions >=0.10.4
     , hspec
+    , http-client
+    , http-types
     , metaLampBot
     , mtl >=2.2.2
     , req
