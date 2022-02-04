@@ -14,8 +14,10 @@ import           Conferer.Source.PropertiesFile as Prop (fromConfig)
 import           Data.Text                      (Text, empty, toLower)
 import           GHC.Generics                   (Generic)
 
-import           Logger
-import Env.Persistence
+import           Handlers.Logger                (LogLevel (..))
+import           Internal.Types                 (Token)
+
+data Messenger = Tele | VK deriving (Show)
 instance FromConfig Messenger where
     fromConfig = fetchFromConfigWith (\s -> case toLower s of
         "vk"       -> Just VK
@@ -38,7 +40,7 @@ data Repeat = Repeat {
 
 instance FromConfig Repeat
 
-data Help = Help {
+newtype Help = Help {
     helpMessage :: Text
 } deriving (Show, Generic)
 
@@ -70,4 +72,3 @@ instance DefaultConfig AppConfig where
 
 fetchConfig :: IO AppConfig
 fetchConfig = fetch =<< mkConfig' [] [CLI.fromConfig, Prop.fromConfig "local", Files.fromFilePath "./config/bot.properties"]
-

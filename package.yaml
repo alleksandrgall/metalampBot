@@ -23,12 +23,16 @@ dependencies:
 - base >= 4.7 && < 5
 - hspec
 - req
+- http-client
 - aeson
+- containers
 - stm
+- exceptions >= 0.10.4
 - bytestring
 - text >= 1.2.4
 - conferer >= 1.1.0.0
 - mtl >= 2.2.2
+- http-types
 
 library:
   source-dirs: src
@@ -38,6 +42,7 @@ library:
     - DeriveGeneric
     - GADTs
     - BlockArguments
+    - RecordWildCards
 
 executables:
   metaLampBot-exe:
