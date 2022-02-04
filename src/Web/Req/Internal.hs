@@ -4,14 +4,14 @@ import           Control.Monad.IO.Class (MonadIO)
 import           Data.Aeson             (ToJSON)
 import qualified Data.ByteString.Lazy   as B
 import           Data.Text              (Text, pack)
-import           Internal.Types         (Token)
+import           Internal.Types         (Protocol (..), Token)
 import           Network.HTTP.Client    (ManagerSettings)
 import           Network.HTTP.Req       (GET (GET), LbsResponse,
                                          NoReqBody (NoReqBody), POST (POST),
                                          QueryParam, ReqBodyJson (ReqBodyJson),
                                          ReqBodyLbs (ReqBodyLbs),
-                                         defaultHttpConfig, https, lbsResponse,
-                                         req, runReq, (/:), (=:))
+                                         defaultHttpConfig, http, https,
+                                         lbsResponse, req, runReq, (/:), (=:))
 
 -- | Function to make requests using Network.HTTP.Req library
 --
@@ -19,29 +19,46 @@ import           Network.HTTP.Req       (GET (GET), LbsResponse,
 sendRequestReq :: (MonadThrow m, MonadIO m, ToJSON b) =>
     Maybe ManagerSettings ->
     Maybe b -> -- | possible request body
+    Protocol ->
     Text -> -- | base api url
-    Token ->
     Text -> -- | method
     [(Text, Text)] -> -- | method params
     m LbsResponse
-sendRequestReq _ maybeBody url token method params =
-    maybe
-        (runReq defaultHttpConfig (req
-            GET
-            builtUrl
-            NoReqBody
-            lbsResponse
-            queryParams))
-        (\body -> runReq defaultHttpConfig (req
-            POST
-            builtUrl
-            (ReqBodyJson body)
-            lbsResponse
-            queryParams))
-        maybeBody
+sendRequestReq _ maybeBody prot url method params =
+    if prot == Https then requestHttps else requestHttp
     where
-        builtUrl = https url /: pack ("bot" ++ token) /: method
+        -- | Don't know how to avoid code duplication since type sigs must be different, must consult the CHAT
+        requestHttp =
+         maybe
+            (runReq defaultHttpConfig (req
+                GET
+                builtHttp
+                NoReqBody
+                lbsResponse
+                queryParams))
+            (\body -> runReq defaultHttpConfig (req
+                POST
+                builtHttp
+                (ReqBodyJson body)
+                lbsResponse
+                queryParams))
+            maybeBody
+        requestHttps =
+         maybe
+            (runReq defaultHttpConfig (req
+                GET
+                builtHttp
+                NoReqBody
+                lbsResponse
+                queryParams))
+            (\body -> runReq defaultHttpConfig (req
+                POST
+                builtHttp
+                (ReqBodyJson body)
+                lbsResponse
+                queryParams))
+            maybeBody
+        builtHttp = http  url /: method
+        builtHttps = https url /: method
         queryParams :: (QueryParam p, Monoid p) => p
         queryParams = mconcat $ fmap (uncurry (=:)) params
-        is2XX x = x `mod` 200
-

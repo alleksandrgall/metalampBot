@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE RankNTypes           #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-| Module describes simple functionality for a Handle designed for making requests to REST APIs -}
 module Handlers.Web
     (Config(..)
     ,Handle(..)
@@ -21,12 +22,12 @@ import qualified Data.ByteString.Lazy as B
 import           Data.Function        ((&))
 import           Data.Maybe           (fromJust, fromMaybe)
 import           Data.String          (IsString (fromString))
-import           Data.Text            (Text, pack)
+import           Data.Text            (Text, intercalate, pack)
 import           Exceptions.Body      (BodyException (..))
 import           Exceptions.Parse     (ParseException (..))
 import           Exceptions.Web       (WebException (..))
 import qualified Handlers.Logger      as L
-import           Internal.Types       (Token, Url)
+import           Internal.Types       (Protocol, Token, Url)
 import           Network.HTTP.Client  (ManagerSettings, defaultManagerSettings)
 import           Network.HTTP.Req     (BsResponse, HttpResponse, LbsResponse,
                                        responseBody, responseStatusCode,
@@ -37,12 +38,12 @@ import           Prelude              hiding (error)
 --
 -- | ManagerSettings does not add dep footprint since http-client is already in req's deps
 data Config = Config {
-    -- | Connection manager. Added for forward compatability
+   -- | Connection manager. Added for forward compatability
     cManagerSettings :: Maybe ManagerSettings
     -- | Bot token
-  , cToken           :: Token
-    -- | Base URL of mesenger's API
   , cUrl             :: Text
+    -- | Http or Https
+  , cProtocol        :: Protocol
 }
 
 class Result a where
@@ -70,8 +71,8 @@ data Handle m a b = Handle {
         (Result a, ToJSON b, MonadThrow m) =>
         Maybe ManagerSettings
         -> Maybe b
+        -> Protocol
         -> Url
-        -> Token
         -> Text
         -> [(Text, Text)]
         -> m a
@@ -91,19 +92,19 @@ makeRequest h@Handle {..} maybeBody method params = do
     resp <- handleWebException hLogger (hConfig & cUrl) method $ hSendRequest
         (hConfig & cManagerSettings)
         maybeBody
+        (hConfig & cProtocol)
         (hConfig & cUrl)
-        (hConfig & cToken)
         method
         params
     L.info hLogger $ L.WithBs
-        ("Got response from" <> (hConfig & cUrl) <> ", method: " <> method <>
+        ("Got response from" <> targetUrl <>
         "\n\tCode: " <> (pack . show $ resp & getCode) <>
         "\n\tDescription: " <> (resp & getDescription) <>
         "\n\tBody: ")
         (resp & getBody)
     if mempty == (resp & getBody) then do
         L.error hLogger $ L.JustText $
-            "Response was got but body is empty" <> (hConfig & cUrl) <> method <>
+            "Response was got but body is empty from " <> targetUrl <>
             "\n\tCode: " <> (pack . show $ resp & getCode) <>
             "\n\tDescription: " <> (resp & getDescription)
         throwM $ RBodyException . EmptyReponseBody  $
@@ -113,7 +114,7 @@ makeRequest h@Handle {..} maybeBody method params = do
         Left e     -> do
             L.error hLogger $ L.WithBs ("Parsing failed due to mismatching type, error:\n\t" <> fromString e) (resp & getBody)
             throwM $ RParseException . WrongType . fromString $ e
-
+    where targetUrl = (hConfig & cUrl) <> "/" <> method <> "/" <> (intercalate "&" . map (\(k, v) -> k <> "=" <> v) $ params)
 
 
 
