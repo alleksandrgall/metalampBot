@@ -2,7 +2,7 @@
 
 -- | This module will contain generalized response types
 -- it is supposed to be imported via qualified
-module Bot.Telegram.Internal.ResponseTypes where
+module Bot.Telegram.Internal.ResponseTypesC where
 
 import           Control.Applicative (Alternative ((<|>)))
 import           Control.Monad       (MonadPlus (mzero))

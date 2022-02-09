@@ -25,11 +25,14 @@ source-repository head
 
 library
   exposed-modules:
+      Bot.Telegram.Implement
       Bot.Telegram.Internal.ResponseTypes
+      Bot.Telegram.Internal.ResponseTypesC
       Config
-      Exceptions.Body
-      Exceptions.Parse
-      Exceptions.Web
+      Exceptions.Request
+      Exceptions.Request.Body
+      Exceptions.Request.Parse
+      Exceptions.Request.Web
       Handlers.Bot
       Handlers.Logger
       Handlers.Web

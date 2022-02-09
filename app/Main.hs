@@ -19,11 +19,12 @@ import           GHC.Generics                        (Generic)
 import qualified Handlers.Web                        as WH
 import qualified Logger.IO                           as L
 
+import           Data.String                         (IsString (fromString))
 import qualified Handlers.Logger                     as LH
-import           Network.HTTP.Req
+import           Internal.Types
+import           Network.HTTP.Req                    hiding (Scheme (..))
 import           Network.HTTP.Types.Status
 import qualified Web.Req                             as W
-
 
 type NumberOfRepeats = M.Map Int64 Int
 
@@ -56,7 +57,7 @@ main = do
   appConfig <- fetchConfig
   let k = Keyboard [("button1", "1"), ("button2", "2")]
   L.withHandle (L.Config Nothing True L.Info) $ \l ->
-    W.withHandle (W.Config (appConfig & appConfigToken) "api.telegram.org") l $ \w -> do
+    W.withHandle (W.Config ("api.telegram.org/bot" <> fromString (appConfig & appConfigToken)) Https) l $ \w -> do
       (WH.makeRequest w (Just k) "sendMessage" [("chat_id", "646472939"), ("text", "keyboard")] :: IO (Response Message))
       LH.info l $ LH.JustText "Gleb pidor"
   return ()

@@ -23,9 +23,7 @@ import           Data.Function        ((&))
 import           Data.Maybe           (fromJust, fromMaybe)
 import           Data.String          (IsString (fromString))
 import           Data.Text            (Text, intercalate, pack)
-import           Exceptions.Body      (BodyException (..))
-import           Exceptions.Parse     (ParseException (..))
-import           Exceptions.Web       (WebException (..))
+import           Exceptions.Request
 import qualified Handlers.Logger      as L
 import           Internal.Types       (Protocol, Token, Url)
 import           Network.HTTP.Client  (ManagerSettings, defaultManagerSettings)
@@ -77,12 +75,6 @@ data Handle m a b = Handle {
         -> [(Text, Text)]
         -> m a
 }
-
--- | Exception type which makeRequest throws into the bot's logic
-data RequestException = RWebException WebException | RParseException ParseException | RBodyException BodyException
-    deriving (Show)
-instance Exception RequestException where
-
 
 -- | Function for making requests and parsing them
 --

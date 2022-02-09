@@ -1,4 +1,4 @@
-module Exceptions.Parse
+module Exceptions.Request.Parse
     (ParseException(..))
 where
 import           Control.Exception (Exception)
