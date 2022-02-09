@@ -1,4 +1,4 @@
-module Exceptions.Body where
+module Exceptions.Request.Body where
 import           Control.Monad.Catch (Exception)
 import           Data.Text           (Text)
 

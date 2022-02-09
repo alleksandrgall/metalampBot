@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-module Exceptions.Web
+module Exceptions.Request.Web
     (WebException(..))
 where
 import           Control.Exception   (Exception, SomeException)
@@ -29,7 +29,7 @@ instance Exception WebException where
                 ConnectionFailure e -> throwM . ConnectionException . pack . show $ e
                 ConnectionTimeout -> throwM . ConnectionException $ mempty
                 other -> throwM . SomeWebException $ se
-            VanillaHttpException (Http.InvalidUrlException url msg) -> throwM . Exceptions.Web.InvalidUrlException (pack url) $ pack msg
+            VanillaHttpException (Http.InvalidUrlException url msg) -> throwM . Exceptions.Request.Web.InvalidUrlException (pack url) $ pack msg
             other -> throwM . SomeWebException $ se
         | otherwise = Nothing
 

@@ -1,53 +1,99 @@
-module Handlers.Bot where
+{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE RankNTypes            #-}
 
-import           Control.Concurrent.STM (TVar)
-import           Control.Monad.Catch    (MonadThrow)
+module Handlers.Bot
+  (MessageContent(..)
+  ,Command(..)
+  ,UpdateContent(..)
+  ,Update(..)
+  ,Config(..)
+  ,Handle(..)
+  ) where
+
+--import           Control.Concurrent.STM (TVar)
+import           Control.Monad.Catch    (MonadCatch, MonadThrow)
+import           Control.Monad.RWS      (MonadReader)
+import           Control.Monad.Reader   (ReaderT (runReaderT))
+
+import           Control.Concurrent.STM (TVar, readTVar)
+import           Control.Monad.ST
+import           Data.Aeson             (FromJSON, ToJSON)
+import           Data.Foldable          (traverse_)
 import           Data.Int               (Int64)
 import           Data.Map               (Map)
+import           Data.STRef
 import           Data.Text              (Text)
+import           Exceptions.Request
 import qualified Handlers.Logger        as L
+import           Handlers.Web           (Result)
 import qualified Handlers.Web           as Web
 import           Internal.Types         (Token)
+data UpdateContent t s f =
+    UCCallbackQuary CallBackquery |
+    UCMessage (Message t s f) |
+    UCCommand Command
 
-data Command = Help | Repeat
+data MessageContent t s f = MCText t | MCSticker s | MCFile f
+data Message t s f = Message {
+   mChatId         :: Int64
+ , mFromId         :: Int64
+ , mMessageId      :: Int64
+ , mMessageContent :: MessageContent t s f
+ }
 
--- Может сделать класс с Type ????
-data MessageContent = MCCommand Command | MCText Text | MCSticker Int64 | MCFile Int64
+data CallBackquery = CallBackquery {
+    cbChatId :: Int64
+  , cbFromId :: Int64
+  , cbId     :: Int64
+  , cbData   :: String
+  }
 
-data UpdateContent =
-    CallbackQuary {
-        cqChatId    :: Int64
-      , cqFromId    :: Int64
-      , cqMessageId :: Int64
-      , cqData      :: String
-    } |
-    Message {
-        mChatId         :: Int64
-      , mFromId         :: Int64
-      , mMessageId      :: Int64
-      , mMessageContent :: MessageContent
-    }
+data Command =
+  Help {
+    cChatId :: Int64
+  , cFromId :: Int64
+  } |
+  Repeat {
+    cChatId :: Int64
+  , cFromId :: Int64
+  }
 
-data Update = Update {
-        uId     :: Int64
-      , uUpdate :: [UpdateContent]
-    }
+data Update t s f = Update {
+    uId     :: Int64
+  , uUpdate :: UpdateContent t s f
+  }
+
+newtype Keyboard = Keyboard [(Text, Text)]
 
 data Config = Config {
     cToken      :: Token
   , cBaseRepeat :: Int
-}
+  }
 
-data Handle m a b = Handle {
+data Handle m t s f = Handle {
     hConfig     :: Config
-  , hWeb        :: Web.Handle m a b
   , hLogger     :: L.Handle m
-  , hUserRepeat :: TVar (Map Int64 Int)
-  , hOffset     :: TVar Int64
-}
+  , hInit       :: (MonadCatch m) => m ()
+  -- | All of the functions resulting in m () can throw a `Exceptions.Request.RequestException`
+  , hGetUpdates :: (FromJSON (Update t s f), MonadCatch m) => m [Update t s f]
+  , hReplyMes   :: (ToJSON (Message t s f), MonadCatch m) => Int -> Message t s f -> m ()
+  , hAnsCom     :: (ToJSON Keyboard, MonadCatch m) => Keyboard -> Command -> m ()
+  , hAnsCB      :: (MonadCatch m) => CallBackquery -> m ()
+  , hUserRepeat :: forall thread . STRef thread (Map Int64 Int)
+  , hOffset     :: forall thread . STRef thread Int64
+  -- | Delay in microsec
+  , hDelay      :: Int
+  }
 
-class (MonadThrow m) => Bot m where
-  init  :: Handle m a b -> m ()
-  getUpdates :: Handle m a b -> m [UpdateContent]
-  processUpdates :: Handle m a b -> [UpdateContent] -> m ()
 
+processUpdates :: (MonadCatch m, FromJSON (Update t s f), ToJSON (Message t s f), ToJSON Keyboard) =>
+  Handle m t s f -> [Update t s f] -> m ()
+processUpdates Handle {..} = traverse_ processUpdate
+  where
+    processUpdate (Update id uc)
+      | runST (readSTRef hOffset) > id = return ()
+      | otherwise = case uc of
+
+        UCCallbackQuary CallBackquery {..} -> undefined
+        UCCommand c                        -> undefined
+        UCMessage m                        -> undefined
