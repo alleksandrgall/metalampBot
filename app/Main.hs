@@ -1,5 +1,7 @@
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
+{-# LANGUAGE RankNTypes        #-}
 module Main where
 import           Bot.Telegram.Internal.ResponseTypes
 import           Config
@@ -19,6 +21,9 @@ import           GHC.Generics                        (Generic)
 import qualified Handlers.Web                        as WH
 import qualified Logger.IO                           as L
 
+import           Control.Monad.ST
+import           Data.STRef                          (STRef, newSTRef,
+                                                      readSTRef)
 import           Data.String                         (IsString (fromString))
 import qualified Handlers.Logger                     as LH
 import           Internal.Types
@@ -52,12 +57,10 @@ newtype Keyboard = Keyboard [(Text, Text)] deriving (Generic)
 instance ToJSON Keyboard where
   toJSON (Keyboard ls) = object ["reply_markup" .= object ["inline_keyboard" .= [map (\(name, dat) -> object [("text", String name), ("callback_data", String dat)]) ls]]]
 
-
 main = do
-  appConfig <- fetchConfig
-  let k = Keyboard [("button1", "1"), ("button2", "2")]
-  L.withHandle (L.Config Nothing True L.Info) $ \l ->
-    W.withHandle (W.Config ("api.telegram.org/bot" <> fromString (appConfig & appConfigToken)) Https) l $ \w -> do
-      (WH.makeRequest w (Just k) "sendMessage" [("chat_id", "646472939"), ("text", "keyboard")] :: IO (Response Message))
-      LH.info l $ LH.JustText "Gleb pidor"
+
+  print $ runST $ readSTRef stref
+  return (runST $ modifySTRef' stref (+1))
+  print $ runST $ readSTRef stref
+
   return ()
