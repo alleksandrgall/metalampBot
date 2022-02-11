@@ -57,10 +57,7 @@ newtype Keyboard = Keyboard [(Text, Text)] deriving (Generic)
 instance ToJSON Keyboard where
   toJSON (Keyboard ls) = object ["reply_markup" .= object ["inline_keyboard" .= [map (\(name, dat) -> object [("text", String name), ("callback_data", String dat)]) ls]]]
 
+
+
 main = do
-
-  print $ runST $ readSTRef stref
-  return (runST $ modifySTRef' stref (+1))
-  print $ runST $ readSTRef stref
-
   return ()

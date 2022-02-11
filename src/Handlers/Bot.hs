@@ -10,32 +10,23 @@ module Handlers.Bot
   ,Handle(..)
   ) where
 
---import           Control.Concurrent.STM (TVar)
---import           Control.Concurrent.STM (TVar)
---import           Control.Concurrent.STM (TVar)
---import           Control.Concurrent.STM (TVar)
-import           Control.Monad        (foldM, when)
-import           Control.Monad.Catch  (MonadCatch, MonadThrow (throwM), handle)
-import           Control.Monad.RWS    (MonadReader)
-import           Control.Monad.Reader (ReaderT (runReaderT))
-import           Control.Monad.ST     (runST)
-import           Data.Aeson           (FromJSON, ToJSON)
-import           Data.Function        ((&))
-import           Data.Int             (Int64)
-import           Data.Map             (Map, insert)
-import           Data.STRef           (STRef, modifySTRef', readSTRef,
-                                       writeSTRef)
-import           Data.String          (IsString (..))
-import           Data.Text            (Text, unpack)
+import           Control.Monad       (foldM, forever, replicateM_, when)
+import           Control.Monad.Catch (MonadCatch, MonadThrow (throwM), handle)
+
+import           Data.Aeson          (FromJSON, ToJSON)
+import           Data.Function       ((&))
+import           Data.Int            (Int64)
+import           Data.String         (IsString (..))
+import           Data.Text           (Text, pack, unpack)
 import           Exceptions.Request
-import qualified Handlers.Logger      as L
-import           Handlers.Web         (Result)
-import qualified Handlers.Web         as Web
-import           Internal.Types       (Token)
-data UpdateContent t s f =
+import qualified Handlers.Logger     as L
+import           Internal.Types      (Token)
+
+data UpdateContent t s =
     UCCallbackQuary CallBackquery |
-    UCMessage (Message t s f) |
-    UCCommand Command
+    UCMessage (Message t s) |
+    UCCommand Command |
+    UnknownUpdate
 
 data UserInfo = UserInfo {
     fromId :: Int64
@@ -45,10 +36,10 @@ data UserInfo = UserInfo {
 instance Ord UserInfo where
   ui1 <= ui2 = (ui1 & fromId) <= (ui2 & fromId)
 
-data MessageContent t s f = MCText t | MCSticker s | MCFile f
-data Message t s f = Message {
+data MessageContent t s = MCText t | MCSticker s
+data Message t s = Message {
    mUserInfo       :: UserInfo
- , mMessageContent :: MessageContent t s f
+ , mMessageContent :: MessageContent t s
  }
 
 data CallBackquery = CallBackquery {
@@ -62,58 +53,109 @@ data Command =
   Repeat UserInfo |
   Start UserInfo
 
-data Update t s f = Update {
+data Update t s = Update {
     uId     :: Int64
-  , uUpdate :: UpdateContent t s f
+  , uUpdate :: UpdateContent t s
   }
 
 newtype Keyboard = Keyboard [(Text, Text)]
 
+data KeyboardMessage = KeyboardMessage {
+    kmUserInfo :: UserInfo
+  , kmKeyboard :: Keyboard
+}
+
 data Config = Config {
-    cToken      :: Token
-  , cBaseRepeat :: Int
+    cBaseRepeat :: Int
   , cStartMes   :: Text
   , cHelpMes    :: Text
   , cRepeatMes  :: Text
-  }
-
-data Handle m t s f = Handle {
-    hConfig     :: Config
-  , hLogger     :: L.Handle m
-  -- | All of the functions resulting in `m a` can throw a `Exceptions.Request.RequestException`
-  , hInit       :: (MonadCatch m) => m ()
-  , hGetUpdates :: (FromJSON (Update t s f), MonadCatch m) => Int64 -> m [Update t s f]
-  , hSendMes    :: (ToJSON (Message t s f), IsString t, MonadCatch m) => Message t s f -> m ()
-  , hAnsCB      :: (MonadCatch m) => CallBackquery -> m ()
-  , hUserRepeat :: forall thread . STRef thread (Map UserInfo Int)
-  , hOffset     :: forall thread . STRef thread Int64
   -- | Delay in microsec
-  , hDelay      :: Int
+  , cDelay      :: Int
   }
 
-getUpdates :: (FromJSON (Update t s f), MonadCatch m) => Handle m t s f -> m [Update t s f]
+-- | hInit, hGetUpdates, hSendMes, hAnsCB can throw a `Exceptions.Request.RequestException`
+data Handle m t s = Handle {
+    hConfig           :: Config
+  , hLogger           :: L.Handle m
+  , hInit             :: (MonadCatch m) => m ()
+  , hSleep            :: m ()
+  , hGetUpdates       :: (FromJSON (Update t s), MonadCatch m) => Int64 -> m [Update t s]
+  , hSendMes          :: (ToJSON (Message t s), IsString t, MonadCatch m) => Message t s -> m ()
+  , hSendKeyboard     :: (ToJSON KeyboardMessage, MonadCatch m) => KeyboardMessage -> m ()
+  -- | Mostlyor closing opened keyboard
+  , hAnsCB            :: (MonadCatch m) => CallBackquery -> m ()
+  -- | Getters and settersor offset and repeat counteror each user
+  , hGetOffset        :: m Int64
+  , hSetOffset        :: Int64 -> m ()
+  , hInsertUserRepeat :: UserInfo -> Int -> m ()
+  , hGetUserRepeat    :: UserInfo -> m Int
+  }
+
+
+runBot :: (MonadCatch m,FromJSON (Update t s), IsString t, ToJSON (Message t s), ToJSON KeyboardMessage) =>
+  Handle m t s -> m ()
+runBot h@Handle {..} = do
+  hInit
+  L.info hLogger $ L.JustText "Initialized bot."
+  forever (go h)
+  where
+    go h = getUpdates h >>= processUpdates h >> hSleep
+
+getUpdates :: (FromJSON (Update t s), MonadCatch m) => Handle m t s -> m [Update t s]
 getUpdates Handle {..} = handleEmptyBody $ do
-  hGetUpdates (runST $ readSTRef hOffset)
+  hGetOffset >>= hGetUpdates
   where
     handleEmptyBody = handle $ \case
-      RBodyException (EmptyReponseBody t) -> L.info hLogger (L.JustText "No updates") >> return []
-      other                               -> throwM other
+      RBodyException EmptyReponseBody -> L.info hLogger (L.JustText "No updates") >> return []
+      other                           -> throwM other
 
-processUpdates :: (MonadCatch m, FromJSON (Update t s f), IsString t, ToJSON (Message t s f), ToJSON Keyboard) =>
-  Handle m t s f -> [Update t s f] -> m ()
-processUpdates Handle {..} uls = do
-  let currentOffset = runST $ readSTRef hOffset
-  newOffset <- foldM (\maxOffset (Update id uc) -> do
-    when (id >= currentOffset) (processUpdateContent uc)
-    if id >= maxOffset then return id else return maxOffset) currentOffset uls
-  return (runST $ writeSTRef hOffset newOffset)
+processUpdates :: (MonadCatch m, IsString t, ToJSON (Message t s), ToJSON KeyboardMessage) =>
+  Handle m t s -> [Update t s] -> m ()
+processUpdates h@Handle {..} uls = do
+  currentOffset <- hGetOffset
+  newOffset <- foldM (\maxOffset (Update uId uc) -> do
+    when (uId >= currentOffset) (processUpdateContent h uc)
+    if uId >= maxOffset then return uId else return maxOffset) currentOffset uls
+  hSetOffset newOffset
+
+processUpdateContent :: (MonadCatch m, IsString t, ToJSON (Message t s), ToJSON KeyboardMessage) =>
+  Handle m t s -> UpdateContent t s -> m ()
+processUpdateContent h@Handle {..} = \case
+  UCCallbackQuary cb -> processCallback h cb
+  UCCommand c        -> processCommand h c
+  UCMessage m        -> processMessage h m
+  UnknownUpdate      -> return ()
+
+processCallback :: (MonadCatch m) => Handle m t s -> CallBackquery -> m ()
+processCallback Handle {..} cb = do
+  oldRepeat <- hGetUserRepeat (cb & cbUserInfo)
+  let newRepeat = ((read $ cb & cbData) :: Int)
+  hInsertUserRepeat (cb & cbUserInfo) newRepeat
+  hAnsCB cb
+  L.info hLogger $ L.JustText ("User repeat counter was adjusted and answer was send to " <> showUserInfo (cb & cbUserInfo)
+    <> "\n\tOld repeat: " <> (pack . show $ oldRepeat) <> "\n\tNew repeat: " <> (pack . show $ newRepeat))
+
+processCommand :: (IsString t, MonadCatch m, ToJSON KeyboardMessage, ToJSON (Message t s)) => Handle m t s -> Command -> m ()
+processCommand Handle {..} = \case
+  Start ui  -> do
+    hInsertUserRepeat ui $ hConfig & cBaseRepeat
+    hSendMes $ Message ui $ MCText (fromString $ unpack (hConfig & cStartMes))
+    L.info hLogger $ L.JustText ("New user has been added, info:" <> showUserInfo ui)
+  Help ui   -> do
+    hSendMes $ Message ui $ MCText (fromString $ unpack (hConfig & cHelpMes))
+    L.info hLogger $ L.JustText ("Help message was sent to " <> showUserInfo ui)
+  Repeat ui -> do
+    hSendKeyboard $ KeyboardMessage ui repeatKeyboard
+    L.info hLogger $ L.JustText ("Keyboard was sent to " <> showUserInfo ui)
   where
-    processUpdateContent = \case
-          UCCallbackQuary CallBackquery {..} -> undefined
-          UCCommand c                        -> case c of
-            Start ui  -> do
-              return (runST $ modifySTRef' hUserRepeat $ \m -> insert ui (hConfig & cBaseRepeat) m)
-              hSendMes (Message ui $ MCText (fromString (unpack (hConfig & cStartMes))))
-            Help UserInfo {..}   -> undefined
-            Repeat UserInfo {..} -> undefined
-          UCMessage m                        -> undefined
+    repeatKeyboard = Keyboard $ map (\i -> (pack . show $ i, pack . show $ i)) (take 5 ([1,2..] :: [Int]))
+
+processMessage :: (IsString t, ToJSON (Message t s), MonadCatch m) => Handle m t s -> Message t s -> m ()
+processMessage Handle {..} m = do
+  userRepeat <- hGetUserRepeat (m & mUserInfo)
+  replicateM_ userRepeat (hSendMes m)
+  L.info hLogger $ L.JustText ("Message was sent " <> (pack . show $ userRepeat) <> " times to " <> showUserInfo (m & mUserInfo))
+
+showUserInfo :: UserInfo -> Text
+showUserInfo ui = "user id: " <> (pack . show $ ui & fromId) <> ", \n\tchat id: " <> (pack . show $ ui & chatId)
