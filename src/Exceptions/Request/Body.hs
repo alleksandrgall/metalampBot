@@ -4,6 +4,6 @@ import           Data.Text           (Text)
 
 
 
-newtype BodyException = EmptyReponseBody Text deriving (Show)
+data BodyException = EmptyReponseBody deriving (Show)
 
 instance Exception BodyException

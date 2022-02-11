@@ -99,8 +99,7 @@ makeRequest h@Handle {..} maybeBody method params = do
             "Response was got but body is empty from " <> targetUrl <>
             "\n\tCode: " <> (pack . show $ resp & getCode) <>
             "\n\tDescription: " <> (resp & getDescription)
-        throwM $ RBodyException . EmptyReponseBody  $
-            "\nCode: " <> (pack . show $ resp & getCode) <> "\nDescription: " <> (resp & getDescription)
+        throwM $ RBodyException EmptyReponseBody
     else case eitherDecode (resp & getBody) of
         Right body -> return body
         Left e     -> do

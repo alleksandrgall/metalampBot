@@ -28,6 +28,7 @@ library
       Bot.Telegram.Implement
       Bot.Telegram.Internal.ResponseTypes
       Bot.Telegram.Internal.ResponseTypesC
+      Bot.Telegram.JSONInstances
       Config
       Exceptions.Request
       Exceptions.Request.Body
