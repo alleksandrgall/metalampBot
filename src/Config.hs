@@ -35,6 +35,7 @@ instance FromConfig LogLevel where
 
 data Repeat = Repeat {
     repeatDefaultNumber :: Int,
+    repeatKeyboardMes   :: Text,
     repeatMessage       :: Text
 } deriving (Show, Generic)
 
@@ -64,6 +65,7 @@ instance DefaultConfig AppConfig where
             appConfigMessenger = Tele,
             appConfigRepeat = Repeat {
                 repeatDefaultNumber = 1,
+                repeatKeyboardMes = "This is a default repeat message",
                 repeatMessage = "This is a default repeat message"},
             appConfigHelp = Help {
                 helpMessage = "This is a default help message"},

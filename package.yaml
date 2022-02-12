@@ -27,6 +27,7 @@ dependencies:
 - aeson
 - containers
 - stm
+- unordered-containers
 - exceptions >= 0.10.4
 - bytestring
 - text >= 1.2.4

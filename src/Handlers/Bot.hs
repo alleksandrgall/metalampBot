@@ -2,12 +2,17 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE RankNTypes            #-}
 module Handlers.Bot
-  (MessageContent(..)
-  ,Command(..)
-  ,UpdateContent(..)
-  ,Update(..)
-  ,Config(..)
+  (Config(..)
   ,Handle(..)
+  ,Message(..)
+  ,MessageContent(..)
+  ,Command(..)
+  ,Update(..)
+  ,UpdateContent(..)
+  ,UserInfo(..)
+  ,Callbackquery(..)
+  ,Keyboard(..)
+  ,KeyboardMessage(..)
   ) where
 
 import           Control.Monad       (foldM, forever, replicateM_, when)
@@ -16,62 +21,62 @@ import           Control.Monad.Catch (MonadCatch, MonadThrow (throwM), handle)
 import           Data.Aeson          (FromJSON, ToJSON)
 import           Data.Function       ((&))
 import           Data.Int            (Int64)
+import           Data.Maybe          (fromJust, isNothing)
 import           Data.String         (IsString (..))
 import           Data.Text           (Text, pack, unpack)
 import           Exceptions.Request
 import qualified Handlers.Logger     as L
 import           Internal.Types      (Token)
+import           Text.Read           (readMaybe)
 
 data UpdateContent t s =
-    UCCallbackQuary CallBackquery |
+    UCCallbackQuary Callbackquery |
     UCMessage (Message t s) |
     UCCommand Command |
     UnknownUpdate
+    deriving (Show)
 
-data UserInfo = UserInfo {
-    fromId :: Int64
-  , chatId :: Int64
-} deriving (Eq)
+type UserInfo = Int64
 
-instance Ord UserInfo where
-  ui1 <= ui2 = (ui1 & fromId) <= (ui2 & fromId)
-
-data MessageContent t s = MCText t | MCSticker s
+data MessageContent t s = MCText t | MCSticker s deriving (Show)
 data Message t s = Message {
    mUserInfo       :: UserInfo
  , mMessageContent :: MessageContent t s
- }
+ } deriving (Show)
 
-data CallBackquery = CallBackquery {
+data Callbackquery = Callbackquery {
     cbUserInfo :: UserInfo
   , cbId       :: Int64
   , cbData     :: String
-  }
+  } deriving (Show)
 
 data Command =
   Help UserInfo |
   Repeat UserInfo |
   Start UserInfo
+  deriving (Show)
 
 data Update t s = Update {
     uId     :: Int64
   , uUpdate :: UpdateContent t s
-  }
+  } deriving (Show)
 
 newtype Keyboard = Keyboard [(Text, Text)]
 
 data KeyboardMessage = KeyboardMessage {
     kmUserInfo :: UserInfo
+  , kmMessage  :: Text
   , kmKeyboard :: Keyboard
 }
 
 data Config = Config {
-    cBaseRepeat :: Int
-  , cStartMes   :: Text
-  , cHelpMes    :: Text
-  , cRepeatMes  :: Text
+    cBaseRepeat        :: Int
+  , cStartMes          :: Text
+  , cHelpMes           :: Text
+  , cRepeatMes         :: Text
+  , cRepeatKeyboardMes :: Text
   -- | Delay in microsec
-  , cDelay      :: Int
+  , cDelay             :: Int
   }
 
 -- | hInit, hGetUpdates, hSendMes, hAnsCB can throw a `Exceptions.Request.RequestException`
@@ -84,7 +89,7 @@ data Handle m t s = Handle {
   , hSendMes          :: (ToJSON (Message t s), IsString t, MonadCatch m) => Message t s -> m ()
   , hSendKeyboard     :: (ToJSON KeyboardMessage, MonadCatch m) => KeyboardMessage -> m ()
   -- | Mostlyor closing opened keyboard
-  , hAnsCB            :: (MonadCatch m) => CallBackquery -> m ()
+  , hAnsCB            :: (MonadCatch m) => Text -> Callbackquery -> m ()
   -- | Getters and settersor offset and repeat counteror each user
   , hGetOffset        :: m Int64
   , hSetOffset        :: Int64 -> m ()
@@ -117,7 +122,7 @@ processUpdates h@Handle {..} uls = do
   newOffset <- foldM (\maxOffset (Update uId uc) -> do
     when (uId >= currentOffset) (processUpdateContent h uc)
     if uId >= maxOffset then return uId else return maxOffset) currentOffset uls
-  hSetOffset newOffset
+  hSetOffset (newOffset + 1)
 
 processUpdateContent :: (MonadCatch m, IsString t, ToJSON (Message t s), ToJSON KeyboardMessage) =>
   Handle m t s -> UpdateContent t s -> m ()
@@ -127,14 +132,20 @@ processUpdateContent h@Handle {..} = \case
   UCMessage m        -> processMessage h m
   UnknownUpdate      -> return ()
 
-processCallback :: (MonadCatch m) => Handle m t s -> CallBackquery -> m ()
+processCallback :: (MonadCatch m) => Handle m t s -> Callbackquery -> m ()
 processCallback Handle {..} cb = do
   oldRepeat <- hGetUserRepeat (cb & cbUserInfo)
-  let newRepeat = ((read $ cb & cbData) :: Int)
-  hInsertUserRepeat (cb & cbUserInfo) newRepeat
-  hAnsCB cb
-  L.info hLogger $ L.JustText ("User repeat counter was adjusted and answer was send to " <> showUserInfo (cb & cbUserInfo)
-    <> "\n\tOld repeat: " <> (pack . show $ oldRepeat) <> "\n\tNew repeat: " <> (pack . show $ newRepeat))
+  let mNewRepeat = ((readMaybe $ cb & cbData) :: Maybe Int)
+  case mNewRepeat of
+    Nothing -> L.warning hLogger $ L.JustText ("Bad callback reply from client " <> showUserInfo (cb & cbUserInfo))
+    Just newRepeat -> if newRepeat `notElem` [1..5] then
+      L.warning hLogger $ L.JustText ("Bad callback reply from client " <> showUserInfo (cb & cbUserInfo))
+      else do
+        hInsertUserRepeat (cb & cbUserInfo) newRepeat
+        hAnsCB (hConfig & cRepeatMes) cb
+        L.info hLogger $ L.JustText ("User repeat counter was adjusted and answer was send to " <> showUserInfo (cb & cbUserInfo)
+          <> "\n\tOld repeat: " <> (pack . show $ oldRepeat) <> "\n\tNew repeat: " <> (pack . show $ newRepeat))
+
 
 processCommand :: (IsString t, MonadCatch m, ToJSON KeyboardMessage, ToJSON (Message t s)) => Handle m t s -> Command -> m ()
 processCommand Handle {..} = \case
@@ -146,7 +157,7 @@ processCommand Handle {..} = \case
     hSendMes $ Message ui $ MCText (fromString $ unpack (hConfig & cHelpMes))
     L.info hLogger $ L.JustText ("Help message was sent to " <> showUserInfo ui)
   Repeat ui -> do
-    hSendKeyboard $ KeyboardMessage ui repeatKeyboard
+    hSendKeyboard $ KeyboardMessage ui (hConfig & cRepeatKeyboardMes) repeatKeyboard
     L.info hLogger $ L.JustText ("Keyboard was sent to " <> showUserInfo ui)
   where
     repeatKeyboard = Keyboard $ map (\i -> (pack . show $ i, pack . show $ i)) (take 5 ([1,2..] :: [Int]))
@@ -158,4 +169,4 @@ processMessage Handle {..} m = do
   L.info hLogger $ L.JustText ("Message was sent " <> (pack . show $ userRepeat) <> " times to " <> showUserInfo (m & mUserInfo))
 
 showUserInfo :: UserInfo -> Text
-showUserInfo ui = "user id: " <> (pack . show $ ui & fromId) <> ", \n\tchat id: " <> (pack . show $ ui & chatId)
+showUserInfo ui = "user id: " <> (pack . show $ ui)
