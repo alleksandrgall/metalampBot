@@ -37,7 +37,7 @@ makeRequest hLogger maybeBody p url methods params = do
         url
         methods
         params
-    L.info hLogger $ L.WithBs
+    L.debug hLogger $ L.WithBs
         ("Got response from" <> targetUrl <>
         "\n\tCode: " <> (pack . show $ resp & responseStatusCode) <>
         "\n\tDescription: " <> (resp & pack . show . responseStatusMessage) <>
