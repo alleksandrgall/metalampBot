@@ -38,7 +38,7 @@ instance ToJSON TelegramMessage where
 -- | Aeson instances for telegram Callbackquery
 
 instance FromJSON Callbackquery where
-    parseJSON (Object o) = Callbackquery <$> (o .: "from" >>= (.: "id")) <*> o .: "id" <*> o .: "data"
+    parseJSON (Object o) = Callbackquery <$> (o .: "from" >>= (.: "id")) <*> o .: "id" <*> o .: "data" <*> o .:? "message"
     parseJSON _ = mempty
 
 -- | Aeson instances for telegram Command
@@ -64,15 +64,20 @@ instance FromJSON Command where
 
 commandFromString :: String -> UserInfo -> Maybe Command
 commandFromString c ui = case map toLower c of
-    "/repeat" -> Just $ Repeat ui
-    "/help"   -> Just $ Help ui
-    "/start"  -> Just $ Start ui
+    "/repeat" -> Just $ Command ui Repeat
+    "/help"   -> Just $ Command ui Help
+    "/start"  -> Just $ Command ui Start
     _         -> Nothing
 
 -- | Aeson instance for telegram keyboard
 
+instance FromJSON KeyboardMessage where
+    parseJSON (Object o) = KeyboardMessage <$> (o .: "chat" >>= (.: "id")) <*> o .: "message_id"
+        <*> o .: "text" <*> undefined
+    parseJSON _ = mempty
+
 instance ToJSON KeyboardMessage where
-    toJSON (KeyboardMessage ui mes (Keyboard kb)) = object [
+    toJSON (KeyboardMessage ui _ mes (Keyboard kb)) = object [
           "chat_id" .= ui
         , "text"    .= mes
         , "reply_markup" .= object ["reply_markup" .= object
