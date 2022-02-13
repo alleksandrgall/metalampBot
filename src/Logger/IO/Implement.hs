@@ -1,9 +1,12 @@
-module Logger.IO.Implement    (  Config (..)
+module Logger.IO.Implement (
+       parseConfig
+     , Config (..)
      , withHandle
      ) where
 
 
 
+import           Config
 import           Control.Monad              (when)
 import           Control.Monad.Catch        (MonadMask, bracket)
 import           Control.Monad.IO.Class     (MonadIO (liftIO))
@@ -23,12 +26,20 @@ data Config = Config {
     , cLogLevel  :: L.LogLevel
 }
 
+parseConfig :: AppConfig -> Config
+parseConfig AppConfig {..} = Config {
+    cFilePath = appConfigLogger & loggerOutputFile,
+    cToConsole = appConfigLogger & loggerToConsole,
+    cLogLevel  = appConfigLogger & loggerLogLevel
+}
+
+
 {-| Handle takes maybe file to write to, whether to write to console or not and loglevel -}
 withHandle :: (MonadIO m, MonadMask m) => Config -> (L.Handle m -> m a) -> m a
 withHandle c f = do
     if isJust $ c & cFilePath then
         bracket
-            (liftIO $ SIO.openFile (fromJust $ c & cFilePath) SIO.WriteMode)
+            (liftIO $ SIO.openFile (fromJust $ c & cFilePath) SIO.AppendMode)
             (liftIO . SIO.hClose)
             (\h -> f $ L.Handle
                 (L.Config $ c & cLogLevel)

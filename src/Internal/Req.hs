@@ -1,4 +1,4 @@
-module Internal.Req (makeRequest) where
+module Internal.Req (makeRequest, parseResponse) where
 
 import           Control.Monad.Catch    (Exception (fromException), MonadCatch,
                                          MonadThrow, handle, throwM)
@@ -23,13 +23,21 @@ import           Network.HTTP.Req       (GET (GET), LbsResponse,
                                          responseStatusMessage, runReq, (/:),
                                          (=:))
 
+
 newtype Result a = Result a
 instance (FromJSON a) => FromJSON (Result a) where
     parseJSON (Object o) = Result <$> o .: "result"
     parseJSON _          = mempty
 
-makeRequest :: (FromJSON response, MonadCatch m, ToJSON b, MonadIO m) =>
-    L.Handle m -> Maybe b -> Protocol -> Text -> [Text] -> [(Text, Text)] -> m response
+parseResponse :: (FromJSON response, MonadCatch m) => L.Handle m -> B.ByteString -> m response
+parseResponse hLogger respBody = case eitherDecode respBody of
+    Right (Result body) -> return body
+    Left e     -> do
+        L.error hLogger $ L.WithBs ("Parsing failed due to mismatching type, error:\n\t" <> fromString e) respBody
+        throwM $ RParseException . WrongType . fromString $ e
+
+makeRequest :: (MonadCatch m, ToJSON a, MonadIO m) =>
+    L.Handle m -> Maybe a -> Protocol -> Text -> [Text] -> [(Text, Text)] -> m B.ByteString
 makeRequest hLogger maybeBody p url methods params = do
     resp <- handleWebException hLogger url methods $ sendRequestReq
         maybeBody
@@ -49,11 +57,7 @@ makeRequest hLogger maybeBody p url methods params = do
             "\n\tCode: " <> (pack . show $ resp & responseStatusCode) <>
             "\n\tDescription: " <> (resp & pack . show . responseStatusMessage)
         throwM $ RBodyException EmptyReponseBody
-    else case eitherDecode (resp & responseBody) of
-        Right (Result body) -> return body
-        Left e     -> do
-            L.error hLogger $ L.WithBs ("Parsing failed due to mismatching type, error:\n\t" <> fromString e) (resp & responseBody)
-            throwM $ RParseException . WrongType . fromString $ e
+    else return (resp & responseBody)
     where targetUrl = url <> "/" <> intercalate "/" methods <> "?" <> (intercalate "&" . map (\(k, v) -> k <> "=" <> v) $ params)
 
 

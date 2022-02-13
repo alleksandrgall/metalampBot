@@ -47,13 +47,27 @@ newtype Help = Help {
 
 instance FromConfig Help
 
+newtype Start = Start {
+    startMessage :: Text
+} deriving (Show, Generic)
+instance FromConfig Start
+
+data Logger = Logger {
+    loggerLogLevel   :: LogLevel,
+    loggerOutputFile :: Maybe FilePath,
+    loggerToConsole  :: Bool
+} deriving (Generic, Show)
+
+instance FromConfig Logger
+
 data AppConfig = AppConfig
     {
         appConfigToken     :: Token,
         appConfigMessenger :: Messenger,
+        appConfigStart     :: Start,
         appConfigRepeat    :: Repeat,
         appConfigHelp      :: Help,
-        appConfigLogLevel  :: LogLevel
+        appConfigLogger    :: Logger
     } deriving (Generic, Show)
 
 instance FromConfig AppConfig
@@ -63,13 +77,20 @@ instance DefaultConfig AppConfig where
         {
             appConfigToken = "This is a token placeholder" ,
             appConfigMessenger = Tele,
+            appConfigStart = Start {
+                startMessage = "This is a start message"
+            },
             appConfigRepeat = Repeat {
                 repeatDefaultNumber = 1,
                 repeatKeyboardMes = "This is a default repeat message",
-                repeatMessage = "This is a default repeat message"},
+                repeatMessage = "This is a default message for repeat keyboard"},
             appConfigHelp = Help {
                 helpMessage = "This is a default help message"},
-            appConfigLogLevel = Info
+            appConfigLogger = Logger {
+                loggerLogLevel = Info,
+                loggerOutputFile = Nothing,
+                loggerToConsole  = True
+            }
         }
 
 fetchConfig :: IO AppConfig
