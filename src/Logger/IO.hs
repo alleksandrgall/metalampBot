@@ -3,4 +3,4 @@ module Logger.IO
 where
 
 import           Handlers.Logger     as X (Handle, LogLevel (..))
-import           Logger.IO.Implement as X (Config (..), withHandle)
+import           Logger.IO.Implement as X (Config (..), parseConfig, withHandle)

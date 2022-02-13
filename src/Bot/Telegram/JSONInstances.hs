@@ -15,30 +15,38 @@ import           Data.String         (IsString (fromString))
 import           GHC.Generics        (Generic)
 import           Handlers.Bot
 
--- | Type for telegram message and Aeson instances
-
-type TelegramMessage = Message MessageText MessageSticker
-instance FromJSON TelegramMessage where
-    parseJSON (Object o) = Message <$>
-        (o .: "chat" >>= (.: "id"))
-        <*> ((MCText <$> parseJSON (Object o)) <|> (MCSticker <$> (o .: "sticker" >>= (parseJSON . Object))))
-    parseJSON _ = mempty
-
-instance ToJSON TelegramMessage where
-    toJSON (Message ui (MCText MessageText {..})) = object [
+-- | Types for telegram messages and Aeson instances
+type TelegramMessageSend = MessageSend MessageText MessageSticker
+instance ToJSON TelegramMessageSend where
+    toJSON (MessageSend ui (ToUser (CText MessageText {..}))) = object [
           "chat_id" .= ui
         , "text" .= mtText
         , "entities" .= mtEntities
         ]
-    toJSON (Message ui (MCSticker MessageSticker {..})) = object [
+    toJSON (MessageSend ui (ToUser (CSticker MessageSticker {..}))) = object [
            "chat_id" .= ui
          , "sticker" .= msId
         ]
+    toJSON (MessageSend ui (CKeyboard MessageText {..} (Keyboard kb))) = object [
+          "chat_id"  .= ui
+        , "text"     .= mtText
+        , "entities" .= mtEntities
+        , "reply_markup" .= object
+            ["inline_keyboard" .=
+                [map (\(name, dat) -> object [("text", String name), ("callback_data", String dat)]) kb]]
+     ]
+
+type TelegramMessageGet = MessageGet MessageText MessageSticker
+instance FromJSON TelegramMessageGet where
+    parseJSON (Object o) = MessageGet <$>
+        (o .: "chat" >>= (.: "id"))
+        <*> o .: "message_id"
+        <*> ((CText <$> parseJSON (Object o)) <|> (CSticker <$> (o .: "sticker" >>= (parseJSON . Object))))
+    parseJSON _ = mempty
 
 -- | Aeson instances for telegram Callbackquery
-
 instance FromJSON Callbackquery where
-    parseJSON (Object o) = Callbackquery <$> (o .: "from" >>= (.: "id")) <*> o .: "id" <*> o .: "data" <*> o .:? "message"
+    parseJSON (Object o) = Callbackquery <$> (o .: "from" >>= (.: "id")) <*> o .: "id" <*> o .: "data"
     parseJSON _ = mempty
 
 -- | Aeson instances for telegram Command
@@ -50,7 +58,7 @@ instance FromJSON Command where
         txt  <- (o .: "text" :: Parser String)
         ents <- o .: "entities"
         (start, finish) <- withArray "command start and finish" (findBotCommand . toList) ents
-        maybe (parseFail "Unknown command") pure (commandFromString (take finish $ drop start txt) ui)
+        maybe mempty pure (commandFromString (take finish $ drop start txt) ui)
         where
             findBotCommand :: [Value] -> Parser (Int, Int)
             findBotCommand ar = mconcat $ map
@@ -69,23 +77,6 @@ commandFromString c ui = case map toLower c of
     "/start"  -> Just $ Command ui Start
     _         -> Nothing
 
--- | Aeson instance for telegram keyboard
-
-instance FromJSON KeyboardMessage where
-    parseJSON (Object o) = KeyboardMessage <$> (o .: "chat" >>= (.: "id")) <*> o .: "message_id"
-        <*> o .: "text" <*> undefined
-    parseJSON _ = mempty
-
-instance ToJSON KeyboardMessage where
-    toJSON (KeyboardMessage ui _ mes (Keyboard kb)) = object [
-          "chat_id" .= ui
-        , "text"    .= mes
-        , "reply_markup" .= object ["reply_markup" .= object
-            ["inline_keyboard" .=
-                [map (\(name, dat) -> object [("text", String name), ("callback_data", String dat)]) kb]]]
-     ]
-
-
 -- | Type and Aeson instances for telegram updates
 -- Order of parsers for Update content matters, command parser should be the first one
 type TelegramUpdate = Update MessageText MessageSticker
@@ -93,7 +84,9 @@ instance FromJSON TelegramUpdate where
     parseJSON (Object o) = Update <$> o .: "update_id" <*>
         ((o .: "message" >>= (\m -> UCCommand <$> parseJSON m <|> UCMessage <$> parseJSON m))
         <|>
-        (o .: "callback_query" >>= \cb -> UCCallbackQuary <$> parseJSON cb))
+        (o .: "callback_query" >>= \cb -> UCCallbackQuary <$> parseJSON cb)
+        <|>
+        pure UnknownUpdate)
     parseJSON _ = mempty
 
 data MessageText = MessageText {
@@ -130,7 +123,7 @@ data Entity = Entity {
 }   deriving (Show, Generic)
 
 instance ToJSON Entity where
-    toEncoding = genericToEncoding defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "e"}
+    toJSON = genericToJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "e"}
 
 instance FromJSON Entity where
     parseJSON = genericParseJSON defaultOptions { fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "e"}
