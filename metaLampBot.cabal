@@ -36,14 +36,10 @@ library
       Exceptions.Request.Web
       Handlers.Bot
       Handlers.Logger
-      Handlers.Web
       Internal.Req
       Internal.Types
       Logger.IO
       Logger.IO.Implement
-      Web.Req
-      Web.Req.Implement
-      Web.Req.Internal
   other-modules:
       Paths_metaLampBot
   hs-source-dirs:

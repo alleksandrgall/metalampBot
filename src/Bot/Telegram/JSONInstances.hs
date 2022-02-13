@@ -120,7 +120,7 @@ data Entity = Entity {
     , eOffset   :: Int
     , eLength   :: Int
     , eUrl      :: Maybe String
-    , eUser     :: Maybe EntityUser
+    , eUser     :: Maybe User
     , eLanguage :: Maybe String
 }   deriving (Show, Generic)
 
@@ -130,16 +130,16 @@ instance ToJSON Entity where
 instance FromJSON Entity where
     parseJSON = genericParseJSON defaultOptions { fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "e"}
 
-data EntityUser = EntityUser {
+data User = User {
       euId        :: Int64
     , euIsBot     :: Bool
     , euFirstName :: String
 } deriving (Show, Generic)
 
-instance ToJSON EntityUser where
+instance ToJSON User where
     toEncoding = genericToEncoding defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "eu"}
 
-instance FromJSON EntityUser where
+instance FromJSON User where
     parseJSON = genericParseJSON defaultOptions { fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "eu"}
 
 -- instance FromJSON TelegramMessage where
