@@ -4,6 +4,7 @@
 module Handlers.Bot
   (Config(..)
   ,Handle(..)
+  ,runBot
   ,Message(..)
   ,MessageContent(..)
   ,Command(..)
@@ -97,12 +98,12 @@ data Handle m t s = Handle {
   , hGetUserRepeat    :: UserInfo -> m Int
   }
 
-
 runBot :: (MonadCatch m,FromJSON (Update t s), IsString t, ToJSON (Message t s), ToJSON KeyboardMessage) =>
   Handle m t s -> m ()
 runBot h@Handle {..} = do
+  L.info hLogger $ L.JustText "Initializing bot..."
   hInit
-  L.info hLogger $ L.JustText "Initialized bot."
+  L.info hLogger $ L.JustText "Bot Initialized."
   forever (go h)
   where
     go h = getUpdates h >>= processUpdates h >> hSleep
