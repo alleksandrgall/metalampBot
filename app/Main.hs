@@ -1,13 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
-import qualified Bot.Telegram.Implement     as TG (parseConfig, withHandle)
-import           Bot.Telegram.JSONInstances (TelegramUpdate)
-import           Config                     (fetchConfig)
-import           Data.Aeson                 (eitherDecodeFileStrict', encode)
-import           Data.Function              ((&))
-import           Handlers.Bot               (Update (uUpdate), runBot)
-import qualified Logger.IO                  as Lio (parseConfig, withHandle)
+import qualified Bot.Telegram.Implement as TG
+import           Config                 (fetchConfig)
+import           Handlers.Bot           (runBot)
+import qualified Logger.IO              as Lio
 
+
+main :: IO ()
 main = do
   appConfig <- fetchConfig
   Lio.withHandle (Lio.parseConfig appConfig) $ \l ->
