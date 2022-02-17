@@ -25,12 +25,12 @@ instance Exception WebException where
     fromException se |
         Just httpException <- fromException se = case httpException of
             VanillaHttpException (HttpExceptionRequest _ eContent) -> case eContent of
-                (StatusCodeException rs _) -> throwM (CodeMessageException (respStatusCode rs) (respStatusMessage rs))
-                ConnectionFailure e -> throwM . ConnectionException . pack . show $ e
-                ConnectionTimeout -> throwM . ConnectionException $ mempty
-                other -> throwM . SomeWebException $ se
-            VanillaHttpException (Http.InvalidUrlException url msg) -> throwM . Exceptions.Request.Web.InvalidUrlException (pack url) $ pack msg
-            other -> throwM . SomeWebException $ se
+                (StatusCodeException rs _) -> Just (CodeMessageException (respStatusCode rs) (respStatusMessage rs))
+                ConnectionFailure e -> Just $ ConnectionException . pack . show $ e
+                ConnectionTimeout -> Just $ ConnectionException mempty
+                other -> Nothing
+            VanillaHttpException (Http.InvalidUrlException url msg) -> Just $ Exceptions.Request.Web.InvalidUrlException (pack url) $ pack msg
+            other -> Nothing
         | otherwise = Nothing
 
         where

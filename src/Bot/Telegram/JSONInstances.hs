@@ -66,7 +66,7 @@ instance FromJSON Command where
                     t <- (e .: "type" :: Parser String)
                     if t == "bot_command"
                         then (,) <$> e .: "offset" <*> e .: "length"
-                        else parseFail "bot command not found") ar
+                        else mempty) ar
             {-# INLINE findBotCommand #-}
     parseJSON _ = mempty
 

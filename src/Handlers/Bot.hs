@@ -121,19 +121,11 @@ runBot h@Handle {..} = do
   L.info hLogger $ L.JustText "Bot Initialized."
   forever (go h)
   where
-    go h = getUpdates h >>= (\us -> unless (null us) (processUpdates h us)) >> hSleep
+    go h = getUpdates h >>= (\us -> unless (null us)
+      (L.info hLogger (L.JustText "Got updates.") >> processUpdates h us))
 
 getUpdates :: (FromJSON (Update t s), MonadCatch m) => Handle t s m -> m [Update t s]
-getUpdates Handle {..} = handleEmptyBody $ do
-  offset <- hGetOffset
-  L.info hLogger $ L.JustText ("Getting updates with offset: " <> (pack . show $ offset) <> "...")
-  updates <- hGetUpdates offset
-  L.info hLogger $ L.JustText "Got updates."
-  return updates
-  where
-    handleEmptyBody = handle $ \case
-      RBodyException EmptyReponseBody -> L.info hLogger (L.JustText "No updates") >> return []
-      other                           -> throwM other
+getUpdates Handle {..} = hGetOffset >>= hGetUpdates
 
 processUpdates :: (MonadCatch m, IsString t, ToJSON (MessageSend t s)) =>
   Handle t s m -> [Update t s] -> m ()
@@ -143,7 +135,7 @@ processUpdates h@Handle {..} uls = do
   newOffset <- foldM (\maxOffset (Update uId uc) -> do
     when (uId >= currentOffset) (processUpdateContent h uc)
     if uId >= maxOffset then return uId else return maxOffset) currentOffset uls
-  L.info hLogger $ L.JustText "Updates processed."
+  L.info hLogger $ L.JustText "Updates was processed."
   hSetOffset (newOffset + 1)
 
 processUpdateContent :: (MonadCatch m, IsString t, ToJSON (MessageSend t s)) =>
@@ -156,42 +148,40 @@ processUpdateContent h@Handle {..} = \case
 
 processCallback :: (MonadCatch m) => Handle t s m -> Callbackquery -> m ()
 processCallback Handle {..} cb = do
-  L.info hLogger $ L.JustText ("Processing callback from user: " <> showUserInfo (cb & cbUserInfo) <> "...")
-  oldRepeat <- hGetUserRepeat (cb & cbUserInfo)
+  L.info hLogger $ L.JustText ("Processing callback from the " <> showUserInfo (cb & cbUserInfo) <> "...")
   let mNewRepeat = ((readMaybe $ cb & cbData) :: Maybe Int)
   case mNewRepeat of
-    Nothing -> L.warning hLogger $ L.JustText ("Bad callback reply from client " <> showUserInfo (cb & cbUserInfo))
+    Nothing -> L.warning hLogger $ L.JustText ("Bad callback from the " <> showUserInfo (cb & cbUserInfo))
     Just newRepeat -> if newRepeat `notElem` [1..5] then
-      L.warning hLogger $ L.JustText ("Bad callback reply from client " <> showUserInfo (cb & cbUserInfo))
+      L.warning hLogger $ L.JustText ("Bad callback from the " <> showUserInfo (cb & cbUserInfo))
       else do
         hInsertUserRepeat (cb & cbUserInfo) newRepeat
         hAnswerCallback (hConfig & cRepeatMes) cb
-        L.info hLogger $ L.JustText ("User repeat counter was adjusted and answer was send to " <> showUserInfo (cb & cbUserInfo)
-          <> "\n\tOld repeat: " <> (pack . show $ oldRepeat) <> "\n\tNew repeat: " <> (pack . show $ newRepeat))
-
+        L.info hLogger $ L.JustText
+          ("Repeat number of the " <> showUserInfo (cb & cbUserInfo) <> " was adjusted and answer was send to the user\n\t" <>
+           "New number: " <> (pack . show $ newRepeat))
 
 processCommand :: (IsString t, MonadCatch m, ToJSON (MessageSend t s)) => Handle t s m -> Command -> m ()
 processCommand Handle {..} Command {..} = do
-  L.info hLogger $ L.JustText ("Processing command " <> (pack . show $ cCommandType) <> " from user: " <> (pack . show $ cUserInfo) <> "...")
+  L.info hLogger $ L.JustText ("Processing command " <> (pack . show $ cCommandType) <> " from the " <> showUserInfo cUserInfo <> "...")
   case cCommandType of
     Start -> do
+      hGetUserRepeat cUserInfo >>= maybe (hInsertUserRepeat cUserInfo (hConfig & cBaseRepeat)) (\_ -> return ())
       hSendMes $ MessageSend cUserInfo (ToUser $ CText (fromString $ unpack (hConfig & cStartMes)))
       L.info hLogger $ L.JustText ("New user has been added, info:" <> showUserInfo cUserInfo)
     Help -> do
       hSendMes $ MessageSend cUserInfo (ToUser $ CText (fromString $ unpack (hConfig & cHelpMes)))
-      L.info hLogger $ L.JustText ("Help message was sent to " <> showUserInfo cUserInfo)
+      L.info hLogger $ L.JustText ("Help message was sent to the " <> showUserInfo cUserInfo)
     Repeat -> do
       hSendMes $ MessageSend cUserInfo $ CKeyboard (fromString $ unpack (hConfig & cRepeatKeyboardMes)) repeatKeyboard
-      L.info hLogger $ L.JustText ("Keyboard was sent to " <> showUserInfo cUserInfo)
+      L.info hLogger $ L.JustText ("Keyboard was sent to the " <> showUserInfo cUserInfo)
 
 processMessage :: (IsString t, ToJSON (MessageSend t s), MonadCatch m) => Handle t s m -> MessageGet t s -> m ()
 processMessage Handle {..} MessageGet {..} = do
-  L.info hLogger $ L.JustText ("Processing message from user: " <> (pack . show $ mgUserInfo))
-  userRepeat <- handleNoUser mgUserInfo =<< hGetUserRepeat mgUserInfo
+  L.info hLogger $ L.JustText ("Processing message from the " <> showUserInfo mgUserInfo)
+  userRepeat <- maybe (return (hConfig & cBaseRepeat)) return =<< hGetUserRepeat mgUserInfo
   replicateM_ userRepeat (hSendMes $ MessageSend mgUserInfo (ToUser mgContent))
-  L.info hLogger $ L.JustText ("Message was sent " <> (pack . show $ userRepeat) <> " times to " <> showUserInfo mgUserInfo)
-  where
-    handleNoUser ui = maybe (hInsertUserRepeat ui (hConfig & cBaseRepeat) >> return (hConfig & cBaseRepeat)) return
+  L.info hLogger $ L.JustText ("Message was sent " <> (pack . show $ userRepeat) <> " times to the " <> showUserInfo mgUserInfo)
 
 repeatKeyboard :: Keyboard
 repeatKeyboard = Keyboard $ map (\i -> (pack . show $ i, pack . show $ i)) (take 5 ([1,2..] :: [Int]))
