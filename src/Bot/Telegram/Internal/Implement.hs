@@ -2,7 +2,7 @@ module Bot.Telegram.Internal.Implement (Config(..), parseConfig, withHandle) whe
 
 import           Bot.Telegram.Internal.Types (TelegramGettable (GSticker),
                                               TelegramMessageSend,
-                                              TelegramUpdate, TelegramUser (..))
+                                              TelegramUpdate)
 import           Config
 import           Control.Concurrent          (threadDelay)
 import           Control.Monad               (void)
@@ -49,10 +49,10 @@ data Config = Config {
 }
 
 withHandle :: (MonadMask m, MonadIO m) =>
-    Config -> L.Handle m -> (B.Handle TelegramGettable TelegramUser m -> m a) -> m a
+    Config -> L.Handle m -> (B.Handle TelegramGettable m -> m a) -> m a
 withHandle Config {..} hL f = do
     offset <- liftIO $ newIORef 0
-    userRepeat <- liftIO $ newIORef (mempty :: HM.HashMap TelegramUser Int)
+    userRepeat <- liftIO $ newIORef (mempty :: HM.HashMap B.UserInfo Int)
     let c = B.Config cBaseRepeat cStartMes cHelpMes cRepeatMes cRepeatKeyboardMes cDelay
         h = B.Handle {
           hConfig             = c
@@ -66,11 +66,10 @@ withHandle Config {..} hL f = do
         , hSetOffset          = setOffsetTg offset
         , hInsertUserRepeat   = insertUserRepeatTg userRepeat
         , hGetUserRepeat      = getUserRepeatTg userRepeat
-        , hShowUserInfo       = showUiTg
     }
     f h
     where
-        showUiTg (TelegramUser (uId, chatId)) = "user_id: " <> (pack . show $ uId) <> ", chat_id: " <> (pack . show $ chatId)
+
         getOffsetTg ref = liftIO $ readIORef ref
         setOffsetTg ref offset = liftIO $ writeIORef ref offset
         getUserRepeatTg ref ui = (liftIO . readIORef $ ref) <&> HM.lookup ui
@@ -101,7 +100,7 @@ sendMesTg token hL tgMes = case tgMes & B.msContent of
     B.CGettable (GSticker _) -> void $ tgRequest token hL (Just tgMes) "sendSticker" []
     _   -> void $ tgRequest token hL (Just tgMes) "sendMessage" []
 
-ansCbTg :: (MonadMask m, MonadIO m) => String -> L.Handle m -> Text -> B.CallbackQuery TelegramUser -> m ()
+ansCbTg :: (MonadMask m, MonadIO m) => String -> L.Handle m -> Text -> B.CallbackQuery -> m ()
 ansCbTg token hL cbMes B.CallbackQuery {..} = void $ tgRequest token hL (Nothing :: Maybe String) "answerCallbackQuery"
     [("callback_query_id", pack cbId),
      ("text", cbMes)]
