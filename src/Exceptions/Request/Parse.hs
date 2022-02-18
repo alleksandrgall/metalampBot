@@ -6,5 +6,3 @@ import           Data.Text         (Text)
 
 newtype ParseException = WrongType Text
     deriving (Show)
-instance Exception ParseException where
-

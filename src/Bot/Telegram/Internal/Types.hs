@@ -1,13 +1,28 @@
-{-# LANGUAGE FlexibleInstances #-}
-module Bot.Telegram.JSONInstances where
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+module Bot.Telegram.Internal.Types
+    ( TelegramUpdate,
+      TelegramMessageSend,
+      TelegramMessageGet,
+      TelegramGettable(..),
+      TelegramUser(..) )
+where
 
 import           Control.Applicative ((<|>))
 import           Control.Monad       (foldM, when)
-import           Data.Aeson
+import           Data.Aeson          (FromJSON (parseJSON), KeyValue ((.=)),
+                                      Options (fieldLabelModifier),
+                                      ToJSON (toEncoding, toJSON),
+                                      Value (Object, String), camelTo2,
+                                      defaultOptions, genericParseJSON,
+                                      genericToEncoding, genericToJSON, object,
+                                      withArray, withObject, (.:), (.:?))
 import           Data.Aeson.Types    (Parser, parseFail)
 import           Data.Char           (toLower)
 import           Data.Foldable       (Foldable (toList), asum)
+import           Data.Function       ((&))
 import qualified Data.HashMap.Strict as HM
+import           Data.Hashable       (Hashable)
 import           Data.Int            (Int64)
 import           Data.List           (stripPrefix)
 import           Data.Maybe          (fromJust)
@@ -15,46 +30,66 @@ import           Data.String         (IsString (fromString))
 import           GHC.Generics        (Generic)
 import           Handlers.Bot
 
+-- | Type for telegram user (user_id, chat_id)
+newtype TelegramUser = TelegramUser (Int64, Int64)
+    deriving (Eq, Ord, Hashable, Show)
+instance FromJSON TelegramUser where
+    parseJSON (Object o) = fmap TelegramUser $ (,) <$> (o .: "from" >>= (.: "id")) <*> (o .: "chat" >>= (.: "id"))
+    parseJSON _ = mempty
+
+-- | Type for telegram
+data TelegramGettable = GText String (Maybe [Entity]) | GSticker String
+    deriving (Show)
+instance IsString TelegramGettable where
+    fromString s = GText s Nothing
+
 -- | Types for telegram messages and Aeson instances
-type TelegramMessageSend = MessageSend MessageText MessageSticker
+type TelegramMessageSend = MessageSend TelegramGettable TelegramUser
 instance ToJSON TelegramMessageSend where
-    toJSON (MessageSend ui (ToUser (CText MessageText {..}))) = object [
-          "chat_id" .= ui
-        , "text" .= mtText
-        , "entities" .= mtEntities
+    toJSON (MessageSend (TelegramUser (uId, chatId)) (CGettable (GText t ents))) = object [
+          "chat_id" .= chatId
+        , "text" .= t
+        , "entities" .= ents
         ]
-    toJSON (MessageSend ui (ToUser (CSticker MessageSticker {..}))) = object [
-           "chat_id" .= ui
-         , "sticker" .= msId
+    toJSON (MessageSend (TelegramUser (uId, chatId)) (CGettable (GSticker sId))) = object [
+           "chat_id" .= chatId
+         , "sticker" .= sId
         ]
-    toJSON (MessageSend ui (CKeyboard MessageText {..} (Keyboard kb))) = object [
-          "chat_id"  .= ui
-        , "text"     .= mtText
-        , "entities" .= mtEntities
+    toJSON (MessageSend (TelegramUser (uId, chatId)) (CKeyboard t (Keyboard kb))) = object [
+          "chat_id"  .= chatId
+        , "text"     .= t
         , "reply_markup" .= object
             ["inline_keyboard" .=
                 [map (\(name, dat) -> object [("text", String name), ("callback_data", String dat)]) kb]]
-     ]
+        ]
 
-type TelegramMessageGet = MessageGet MessageText MessageSticker
+
+type TelegramMessageGet = MessageGet TelegramGettable TelegramUser
 instance FromJSON TelegramMessageGet where
     parseJSON (Object o) = MessageGet <$>
-        (o .: "chat" >>= (.: "id"))
-        <*> o .: "message_id"
-        <*> ((CText <$> parseJSON (Object o)) <|> (CSticker <$> (o .: "sticker" >>= (parseJSON . Object))))
+        parseJSON (Object o) <*>
+         o .: "message_id" <*>
+        ((GSticker <$> (o .: "sticker" >>= (.: "file_id")))
+        <|>
+        (GText <$> (o .: "text") <*> (o .:? "entities")))
     parseJSON _ = mempty
 
--- | Aeson instances for telegram Callbackquery
-instance FromJSON Callbackquery where
-    parseJSON (Object o) = Callbackquery <$> (o .: "from" >>= (.: "id")) <*> o .: "id" <*> o .: "data"
+-- | Aeson instances for telegram CallbackQuery
+instance FromJSON (CallbackQuery TelegramUser) where
+    parseJSON (Object o) = CallbackQuery <$>
+        fmap TelegramUser
+            ((,) <$> (o .: "from" >>= (.: "id")) <*>
+            (o .: "message" >>= (.: "chat") >>= (.: "id"))) <*>
+        o .: "id" <*>
+        o .: "data"
     parseJSON _ = mempty
 
 -- | Aeson instances for telegram Command
 -- If the message contains a command all other content of named message will be ignored
 -- If the message contains multiple commands only first one will be processed
-instance FromJSON Command where
+instance FromJSON (Command TelegramUser) where
     parseJSON (Object o) = do
-        ui   <- o .: "chat" >>= (.: "id")
+        ui   <- parseJSON (Object o)
         txt  <- (o .: "text" :: Parser String)
         ents <- o .: "entities"
         (start, finish) <- withArray "command start and finish" (findBotCommand . toList) ents
@@ -70,7 +105,7 @@ instance FromJSON Command where
             {-# INLINE findBotCommand #-}
     parseJSON _ = mempty
 
-commandFromString :: String -> UserInfo -> Maybe Command
+commandFromString :: String -> TelegramUser -> Maybe (Command TelegramUser)
 commandFromString c ui = case map toLower c of
     "/repeat" -> Just $ Command ui Repeat
     "/help"   -> Just $ Command ui Help
@@ -79,7 +114,7 @@ commandFromString c ui = case map toLower c of
 
 -- | Type and Aeson instances for telegram updates
 -- Order of parsers for Update content matters, command parser should be the first one
-type TelegramUpdate = Update MessageText MessageSticker
+type TelegramUpdate = Update TelegramGettable TelegramUser
 instance FromJSON TelegramUpdate where
     parseJSON (Object o) = Update <$> o .: "update_id" <*>
         ((o .: "message" >>= (\m -> UCCommand <$> parseJSON m <|> UCMessage <$> parseJSON m))
@@ -89,36 +124,12 @@ instance FromJSON TelegramUpdate where
         pure UnknownUpdate)
     parseJSON _ = mempty
 
-data MessageText = MessageText {
-      mtText     :: String
-    , mtEntities :: Maybe [Entity]
-} deriving (Show, Generic)
-
-instance IsString MessageText where
-    fromString s = MessageText s Nothing
-
-instance FromJSON MessageText where
-    parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "mt"}
-
-instance ToJSON MessageText where
-    toEncoding = genericToEncoding defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "mt"}
-
-
-
-newtype MessageSticker = MessageSticker {
-    msId :: String
-} deriving (Show, Generic)
-
-instance FromJSON MessageSticker where
-    parseJSON (Object o) = MessageSticker <$> o .: "file_id"
-    parseJSON _          = mempty
-
 data Entity = Entity {
       eType     :: String
     , eOffset   :: Int
     , eLength   :: Int
     , eUrl      :: Maybe String
-    , eUser     :: Maybe User
+    , eUser     :: Maybe EntityUser
     , eLanguage :: Maybe String
 }   deriving (Show, Generic)
 
@@ -128,16 +139,16 @@ instance ToJSON Entity where
 instance FromJSON Entity where
     parseJSON = genericParseJSON defaultOptions { fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "e"}
 
-data User = User {
+data EntityUser = EntityUser {
       euId        :: Int64
     , euIsBot     :: Bool
     , euFirstName :: String
 } deriving (Show, Generic)
 
-instance ToJSON User where
+instance ToJSON EntityUser where
     toEncoding = genericToEncoding defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "eu"}
 
-instance FromJSON User where
+instance FromJSON EntityUser where
     parseJSON = genericParseJSON defaultOptions { fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "eu"}
 
 -- instance FromJSON TelegramMessage where

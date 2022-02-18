@@ -1,30 +1,32 @@
-module Bot.Telegram.Implement (Config(..), parseConfig, withHandle) where
+module Bot.Telegram.Internal.Implement (Config(..), parseConfig, withHandle) where
 
-import           Bot.Telegram.JSONInstances
+import           Bot.Telegram.Internal.Types (TelegramGettable (GSticker),
+                                              TelegramMessageSend,
+                                              TelegramUpdate, TelegramUser (..))
 import           Config
-import           Control.Concurrent         (threadDelay)
-import           Control.Monad              (void)
-import           Control.Monad.Catch        (MonadCatch, MonadMask, bracket)
-import           Control.Monad.IO.Class     (MonadIO (liftIO))
-import           Data.Aeson                 (FromJSON, KeyValue ((.=)), ToJSON,
-                                             Value (Array), encode, object)
-import           Data.Aeson.Types           (ToJSON (toJSON))
-import qualified Data.ByteString.Lazy       as BS
-import           Data.Function              ((&))
-import           Data.Functor               ((<&>))
-import qualified Data.HashMap.Lazy          as HM
-import           Data.IORef                 (modifyIORef', newIORef, readIORef,
-                                             writeIORef)
-import           Data.Int                   (Int64)
+import           Control.Concurrent          (threadDelay)
+import           Control.Monad               (void)
+import           Control.Monad.Catch         (MonadCatch, MonadMask, bracket)
+import           Control.Monad.IO.Class      (MonadIO (liftIO))
+import           Data.Aeson                  (FromJSON, KeyValue ((.=)), ToJSON,
+                                              Value (Array), encode, object)
+import           Data.Aeson.Types            (ToJSON (toJSON))
+import qualified Data.ByteString.Lazy        as BS
+import           Data.Function               ((&))
+import           Data.Functor                ((<&>))
+import qualified Data.HashMap.Lazy           as HM
+import           Data.IORef                  (modifyIORef', newIORef, readIORef,
+                                              writeIORef)
+import           Data.Int                    (Int64)
 import           Data.List
-import           Data.String                (IsString (fromString))
-import           Data.Text                  (Text, pack)
+import           Data.String                 (IsString (fromString))
+import           Data.Text                   (Text, pack)
 import           GHC.Exts
-import           GHC.Generics               (Generic)
-import qualified Handlers.Bot               as B
-import qualified Handlers.Logger            as L
-import           Internal.Req               (makeRequest, parseResponse)
-import           Internal.Types             (Protocol (Https))
+import           GHC.Generics                (Generic)
+import qualified Handlers.Bot                as B
+import qualified Handlers.Logger             as L
+import           Internal.Req                (makeRequest, parseResponse)
+import           Internal.Types              (Protocol (Https))
 
 parseConfig :: AppConfig -> Config
 parseConfig AppConfig {..} = Config {
@@ -47,10 +49,10 @@ data Config = Config {
 }
 
 withHandle :: (MonadMask m, MonadIO m) =>
-    Config -> L.Handle m -> (B.Handle MessageText MessageSticker m -> m a) -> m a
+    Config -> L.Handle m -> (B.Handle TelegramGettable TelegramUser m -> m a) -> m a
 withHandle Config {..} hL f = do
     offset <- liftIO $ newIORef 0
-    userRepeat <- liftIO $ newIORef (mempty :: HM.HashMap B.UserInfo Int)
+    userRepeat <- liftIO $ newIORef (mempty :: HM.HashMap TelegramUser Int)
     let c = B.Config cBaseRepeat cStartMes cHelpMes cRepeatMes cRepeatKeyboardMes cDelay
         h = B.Handle {
           hConfig             = c
@@ -64,9 +66,11 @@ withHandle Config {..} hL f = do
         , hSetOffset          = setOffsetTg offset
         , hInsertUserRepeat   = insertUserRepeatTg userRepeat
         , hGetUserRepeat      = getUserRepeatTg userRepeat
+        , hShowUserInfo       = showUiTg
     }
     f h
     where
+        showUiTg (TelegramUser (uId, chatId)) = "user_id: " <> (pack . show $ uId) <> ", chat_id: " <> (pack . show $ chatId)
         getOffsetTg ref = liftIO $ readIORef ref
         setOffsetTg ref offset = liftIO $ writeIORef ref offset
         getUserRepeatTg ref ui = (liftIO . readIORef $ ref) <&> HM.lookup ui
@@ -94,11 +98,11 @@ getUpdatesTg token hL offset = parseResponse hL =<< tgRequest token hL (Nothing 
 
 sendMesTg :: (MonadMask m, MonadIO m) => String -> L.Handle m -> TelegramMessageSend -> m ()
 sendMesTg token hL tgMes = case tgMes & B.msContent of
-    B.ToUser (B.CSticker _) -> void $ tgRequest token hL (Just tgMes) "sendSticker" []
+    B.CGettable (GSticker _) -> void $ tgRequest token hL (Just tgMes) "sendSticker" []
     _   -> void $ tgRequest token hL (Just tgMes) "sendMessage" []
 
-ansCbTg :: (MonadMask m, MonadIO m) => String -> L.Handle m -> Text -> B.Callbackquery -> m ()
-ansCbTg token hL cbMes B.Callbackquery {..} = void $ tgRequest token hL (Nothing :: Maybe String) "answerCallbackQuery"
+ansCbTg :: (MonadMask m, MonadIO m) => String -> L.Handle m -> Text -> B.CallbackQuery TelegramUser -> m ()
+ansCbTg token hL cbMes B.CallbackQuery {..} = void $ tgRequest token hL (Nothing :: Maybe String) "answerCallbackQuery"
     [("callback_query_id", pack cbId),
      ("text", cbMes)]
 
