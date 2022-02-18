@@ -26,7 +26,6 @@ dependencies:
 - http-client
 - aeson
 - containers
-- stm
 - unordered-containers
 - exceptions >= 0.10.4
 - bytestring
@@ -34,6 +33,7 @@ dependencies:
 - conferer >= 1.1.0.0
 - mtl >= 2.2.2
 - http-types
+- hashable >= 1.3.0.0
 
 library:
   source-dirs: src
