@@ -4,8 +4,7 @@ module Bot.Telegram.Internal.Types
     ( TelegramUpdate,
       TelegramMessageSend,
       TelegramMessageGet,
-      TelegramGettable(..),
-      TelegramUser(..) )
+      TelegramGettable(..))
 where
 
 import           Control.Applicative ((<|>))
@@ -30,11 +29,11 @@ import           Data.String         (IsString (fromString))
 import           GHC.Generics        (Generic)
 import           Handlers.Bot
 
--- | Type for telegram user (user_id, chat_id)
-newtype TelegramUser = TelegramUser (Int64, Int64)
-    deriving (Eq, Ord, Hashable, Show)
-instance FromJSON TelegramUser where
-    parseJSON (Object o) = fmap TelegramUser $ (,) <$> (o .: "from" >>= (.: "id")) <*> (o .: "chat" >>= (.: "id"))
+-- | Instances for UserInfo
+
+instance Hashable UserInfo
+instance FromJSON UserInfo where
+    parseJSON (Object o) = UserInfo <$> (o .: "from" >>= (.: "id")) <*> (o .: "chat" >>= (.: "id"))
     parseJSON _ = mempty
 
 -- | Type for telegram
@@ -44,19 +43,19 @@ instance IsString TelegramGettable where
     fromString s = GText s Nothing
 
 -- | Types for telegram messages and Aeson instances
-type TelegramMessageSend = MessageSend TelegramGettable TelegramUser
+type TelegramMessageSend = MessageSend TelegramGettable
 instance ToJSON TelegramMessageSend where
-    toJSON (MessageSend (TelegramUser (uId, chatId)) (CGettable (GText t ents))) = object [
-          "chat_id" .= chatId
+    toJSON (MessageSend UserInfo {..} (CGettable (GText t ents))) = object [
+          "chat_id" .= uiChatId
         , "text" .= t
         , "entities" .= ents
         ]
-    toJSON (MessageSend (TelegramUser (uId, chatId)) (CGettable (GSticker sId))) = object [
-           "chat_id" .= chatId
+    toJSON (MessageSend UserInfo {..} (CGettable (GSticker sId))) = object [
+           "chat_id" .= uiChatId
          , "sticker" .= sId
         ]
-    toJSON (MessageSend (TelegramUser (uId, chatId)) (CKeyboard t (Keyboard kb))) = object [
-          "chat_id"  .= chatId
+    toJSON (MessageSend UserInfo {..} (CKeyboard t (Keyboard kb))) = object [
+          "chat_id"  .= uiChatId
         , "text"     .= t
         , "reply_markup" .= object
             ["inline_keyboard" .=
@@ -64,7 +63,7 @@ instance ToJSON TelegramMessageSend where
         ]
 
 
-type TelegramMessageGet = MessageGet TelegramGettable TelegramUser
+type TelegramMessageGet = MessageGet TelegramGettable
 instance FromJSON TelegramMessageGet where
     parseJSON (Object o) = MessageGet <$>
         parseJSON (Object o) <*>
@@ -75,11 +74,10 @@ instance FromJSON TelegramMessageGet where
     parseJSON _ = mempty
 
 -- | Aeson instances for telegram CallbackQuery
-instance FromJSON (CallbackQuery TelegramUser) where
+instance FromJSON CallbackQuery where
     parseJSON (Object o) = CallbackQuery <$>
-        fmap TelegramUser
-            ((,) <$> (o .: "from" >>= (.: "id")) <*>
-            (o .: "message" >>= (.: "chat") >>= (.: "id"))) <*>
+        (UserInfo <$> (o .: "from" >>= (.: "id")) <*>
+        (o .: "message" >>= (.: "chat") >>= (.: "id"))) <*>
         o .: "id" <*>
         o .: "data"
     parseJSON _ = mempty
@@ -87,7 +85,7 @@ instance FromJSON (CallbackQuery TelegramUser) where
 -- | Aeson instances for telegram Command
 -- If the message contains a command all other content of named message will be ignored
 -- If the message contains multiple commands only first one will be processed
-instance FromJSON (Command TelegramUser) where
+instance FromJSON Command where
     parseJSON (Object o) = do
         ui   <- parseJSON (Object o)
         txt  <- (o .: "text" :: Parser String)
@@ -105,7 +103,7 @@ instance FromJSON (Command TelegramUser) where
             {-# INLINE findBotCommand #-}
     parseJSON _ = mempty
 
-commandFromString :: String -> TelegramUser -> Maybe (Command TelegramUser)
+commandFromString :: String -> UserInfo -> Maybe Command
 commandFromString c ui = case map toLower c of
     "/repeat" -> Just $ Command ui Repeat
     "/help"   -> Just $ Command ui Help
@@ -114,7 +112,7 @@ commandFromString c ui = case map toLower c of
 
 -- | Type and Aeson instances for telegram updates
 -- Order of parsers for Update content matters, command parser should be the first one
-type TelegramUpdate = Update TelegramGettable TelegramUser
+type TelegramUpdate = Update TelegramGettable
 instance FromJSON TelegramUpdate where
     parseJSON (Object o) = Update <$> o .: "update_id" <*>
         ((o .: "message" >>= (\m -> UCCommand <$> parseJSON m <|> UCMessage <$> parseJSON m))
