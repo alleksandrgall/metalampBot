@@ -35,7 +35,6 @@ parseConfig AppConfig {..} = Config {
   , cHelpMes           = appConfigHelp & helpMessage
   , cRepeatMes         = appConfigRepeat & repeatMessage
   , cRepeatKeyboardMes = appConfigRepeat & repeatKeyboardMes
-  , cDelay             = 0
   , cToken             = appConfigToken
 }
 data Config = Config {
@@ -44,7 +43,6 @@ data Config = Config {
   , cHelpMes           :: Text
   , cRepeatMes         :: Text
   , cRepeatKeyboardMes :: Text
-  , cDelay             :: Int
   , cToken             :: String
 }
 
@@ -53,12 +51,12 @@ withHandle :: (MonadMask m, MonadIO m) =>
 withHandle Config {..} hL f = do
     offset <- liftIO $ newIORef 0
     userRepeat <- liftIO $ newIORef (mempty :: HM.HashMap B.UserInfo Int)
-    let c = B.Config cBaseRepeat cStartMes cHelpMes cRepeatMes cRepeatKeyboardMes cDelay
+    let c = B.Config cBaseRepeat cStartMes cHelpMes cRepeatMes cRepeatKeyboardMes
         h = B.Handle {
           hConfig             = c
         , hLogger             = hL
         , hInit               = initTg cToken hL
-        , hSleep              = return ()
+        , hSleep              = liftIO . threadDelay
         , hGetUpdates         = getUpdatesTg cToken hL
         , hSendMes            = sendMesTg cToken hL
         , hAnswerCallback     = ansCbTg cToken hL
@@ -69,7 +67,6 @@ withHandle Config {..} hL f = do
     }
     f h
     where
-
         getOffsetTg ref = liftIO $ readIORef ref
         setOffsetTg ref offset = liftIO $ writeIORef ref offset
         getUserRepeatTg ref ui = (liftIO . readIORef $ ref) <&> HM.lookup ui
@@ -79,6 +76,10 @@ tgRequest :: (MonadCatch m, MonadIO m, ToJSON b) => String -> L.Handle m -> Mayb
 tgRequest token hL body method params = do
     makeRequest hL body Https "api.telegram.org" ["bot" <> fromString token, method] params
 {-# INLINE tgRequest #-}
+
+newtype TgCommands = TgCommands [(Text, Text)] deriving Generic
+instance ToJSON TgCommands where
+    toJSON (TgCommands ls) = object ["commands" .= Array (fromList (map (\(c, d) -> object ["command" .= c, "description" .= d]) ls))]
 
 initTg :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> m ()
 initTg token hL = do
@@ -104,8 +105,4 @@ ansCbTg :: (MonadMask m, MonadIO m) => String -> L.Handle m -> Text -> B.Callbac
 ansCbTg token hL cbMes B.CallbackQuery {..} = void $ tgRequest token hL (Nothing :: Maybe String) "answerCallbackQuery"
     [("callback_query_id", pack cbId),
      ("text", cbMes)]
-
-newtype TgCommands = TgCommands [(Text, Text)] deriving Generic
-instance ToJSON TgCommands where
-    toJSON (TgCommands ls) = object ["commands" .= Array (fromList (map (\(c, d) -> object ["command" .= c, "description" .= d]) ls))]
 
