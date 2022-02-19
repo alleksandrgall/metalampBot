@@ -1,5 +1,4 @@
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Bot.Telegram.Internal.Types
     ( TelegramUpdate,
       TelegramMessageSend,
@@ -7,8 +6,7 @@ module Bot.Telegram.Internal.Types
       TelegramGettable(..))
 where
 
-import           Control.Applicative ((<|>))
-import           Control.Monad       (foldM, when)
+import           Control.Applicative (Alternative ((<|>)))
 import           Data.Aeson          (FromJSON (parseJSON), KeyValue ((.=)),
                                       Options (fieldLabelModifier),
                                       ToJSON (toEncoding, toJSON),
@@ -16,21 +14,22 @@ import           Data.Aeson          (FromJSON (parseJSON), KeyValue ((.=)),
                                       defaultOptions, genericParseJSON,
                                       genericToEncoding, genericToJSON, object,
                                       withArray, withObject, (.:), (.:?))
-import           Data.Aeson.Types    (Parser, parseFail)
+import           Data.Aeson.Types    (Parser)
 import           Data.Char           (toLower)
-import           Data.Foldable       (Foldable (toList), asum)
-import           Data.Function       ((&))
-import qualified Data.HashMap.Strict as HM
+import           Data.Foldable       (Foldable (toList))
 import           Data.Hashable       (Hashable)
 import           Data.Int            (Int64)
 import           Data.List           (stripPrefix)
 import           Data.Maybe          (fromJust)
-import           Data.String         (IsString (fromString))
+import           Data.String         (IsString (..))
 import           GHC.Generics        (Generic)
-import           Handlers.Bot
+import           Handlers.Bot        (CallbackQuery (..), Command (..),
+                                      CommandType (..), Keyboard (..),
+                                      MessageGet (..), MessageSend (..),
+                                      SendContent (..), Update (..),
+                                      UpdateContent (..), UserInfo (..))
 
 -- | Instances for UserInfo
-
 instance Hashable UserInfo
 instance FromJSON UserInfo where
     parseJSON (Object o) = UserInfo <$> (o .: "from" >>= (.: "id")) <*> (o .: "chat" >>= (.: "id"))
@@ -83,7 +82,7 @@ instance FromJSON CallbackQuery where
     parseJSON _ = mempty
 
 -- | Aeson instances for telegram Command
--- If the message contains a command all other content of named message will be ignored
+-- If the message contains a command all other content of the fornamed message will be ignored
 -- If the message contains multiple commands only first one will be processed
 instance FromJSON Command where
     parseJSON (Object o) = do
@@ -117,7 +116,7 @@ instance FromJSON TelegramUpdate where
     parseJSON (Object o) = Update <$> o .: "update_id" <*>
         ((o .: "message" >>= (\m -> UCCommand <$> parseJSON m <|> UCMessage <$> parseJSON m))
         <|>
-        (o .: "callback_query" >>= \cb -> UCCallbackQuary <$> parseJSON cb)
+        (o .: "callback_query" >>= (fmap UCCallbackQuary . parseJSON))
         <|>
         pure UnknownUpdate)
     parseJSON _ = mempty
@@ -148,6 +147,3 @@ instance ToJSON EntityUser where
 
 instance FromJSON EntityUser where
     parseJSON = genericParseJSON defaultOptions { fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "eu"}
-
--- instance FromJSON TelegramMessage where
---     parseJSON (Object o) = Message <$> o .: "from" .: "id" <$>

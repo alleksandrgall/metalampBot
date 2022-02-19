@@ -1,0 +1,6 @@
+module Spec where
+
+import           Bot
+
+main :: IO ()
+main = processCallBack

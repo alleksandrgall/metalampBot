@@ -12,3 +12,4 @@ main = do
   Lio.withHandle (Lio.parseConfig appConfig) $ \l ->
     TG.withHandle (TG.parseConfig appConfig) l $ \b ->
       runBot b
+
