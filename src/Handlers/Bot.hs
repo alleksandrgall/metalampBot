@@ -5,12 +5,10 @@ module Handlers.Bot
   (Config(..)
   ,Handle(..)
   ,runBot
-  ,getUpdates
   ,processUpdates
   ,processCallback
   ,processCommand
   ,processMessage
-  ,processUpdateContent
   ,UserInfo(..)
   ,MessageGet(..)
   ,MessageSend(..)
@@ -30,7 +28,6 @@ import           Data.Int            (Int64)
 import           Data.Maybe          (fromJust, isNothing)
 import           Data.String         (IsString (..))
 import           Data.Text           (Text, pack, unpack)
-import           Exceptions.Request
 import           GHC.Generics        (Generic)
 import qualified Handlers.Logger     as L
 import           Internal.Types      (Token)
@@ -125,31 +122,25 @@ runBot h@Handle {..} = do
   L.info hLogger $ L.JustText "Bot has been initialized."
   forever (go h)
   where
-    go h = getUpdates h >>= (\us -> unless (null us)
+    go h@Handle {..} = hGetOffset >>= hGetUpdates >>= (\us -> unless (null us)
       (L.info hLogger (L.JustText "Got updates.") >> processUpdates h us))
 
-getUpdates :: (Monad m) =>
-  Handle gettable  m -> m [Update gettable ]
-getUpdates Handle {..} = hGetOffset >>= hGetUpdates
-
 processUpdates :: (Monad m, IsString gettable) =>
-  Handle gettable  m -> [Update gettable ] -> m ()
+  Handle gettable  m -> [Update gettable] -> m ()
 processUpdates h@Handle {..} uls = do
   L.info hLogger $ L.JustText "Processing updates..."
   currentOffset <- hGetOffset
   newOffset <- foldM (\maxOffset (Update uId uc) -> do
-    when (uId >= currentOffset) (processUpdateContent h uc)
+    processUpdateContent h uc
     if uId >= maxOffset then return uId else return maxOffset) currentOffset uls
   L.info hLogger $ L.JustText "Updates were processed."
   hSetOffset (newOffset + 1)
-
-processUpdateContent :: (Monad m, IsString gettable) =>
-  Handle gettable  m -> UpdateContent gettable  -> m ()
-processUpdateContent h@Handle {..} = \case
-  UCCallbackQuary cb -> processCallback h cb
-  UCCommand c        -> processCommand h c
-  UCMessage m        -> processMessage h m
-  UnknownUpdate      -> return ()
+    where
+      processUpdateContent h@Handle {..} = \case
+        UCCallbackQuary cb -> processCallback h cb
+        UCCommand c        -> processCommand h c
+        UCMessage m        -> processMessage h m
+        UnknownUpdate      -> return ()
 
 processCallback :: (Monad m) => Handle gettable m -> CallbackQuery  -> m ()
 processCallback Handle {..} cb = do
@@ -172,7 +163,6 @@ processCommand Handle {..} Command {..} = do
   L.info hLogger $ L.JustText ("Processing command " <> (pack . show $ cCommandType) <> " from the " <> showUi cUserInfo <> "...")
   case cCommandType of
     Start -> do
-      hGetUserRepeat cUserInfo >>= maybe (hInsertUserRepeat cUserInfo (hConfig & cBaseRepeat)) (\_ -> return ())
       hSendMes $ MessageSend cUserInfo (CGettable (fromString $ unpack (hConfig & cStartMes)))
       L.info hLogger $ L.JustText ("New user has been added, info:" <> showUi cUserInfo)
     Help -> do
