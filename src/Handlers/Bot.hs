@@ -46,6 +46,9 @@ data MessageGet gettable = MessageGet {
 
 data SendContent gettable = CGettable gettable | CKeyboard Text Keyboard
   deriving (Show, Eq)
+
+instance (IsString gettable) => IsString (SendContent gettable) where
+  fromString s = CGettable . fromString $ s
 data MessageSend gettable = MessageSend {
     msUserInfo :: UserInfo
   , msContent  :: SendContent gettable
@@ -163,10 +166,10 @@ processCommand Handle {..} Command {..} = do
   L.info hLogger $ L.JustText ("Processing command " <> (pack . show $ cCommandType) <> " from the " <> showUi cUserInfo <> "...")
   case cCommandType of
     Start -> do
-      hSendMes $ MessageSend cUserInfo (CGettable (fromString $ unpack (hConfig & cStartMes)))
+      hSendMes $ MessageSend cUserInfo (fromString . unpack $ hConfig & cStartMes)
       L.info hLogger $ L.JustText ("New user has been added, info:" <> showUi cUserInfo)
     Help -> do
-      hSendMes $ MessageSend cUserInfo (CGettable (fromString $ unpack (hConfig & cHelpMes)))
+      hSendMes $ MessageSend cUserInfo (fromString . unpack $ hConfig & cHelpMes)
       L.info hLogger $ L.JustText ("Help message was sent to the " <> showUi cUserInfo)
     Repeat -> do
       hSendMes $ MessageSend cUserInfo $ CKeyboard (hConfig & cRepeatKeyboardMes) repeatKeyboard

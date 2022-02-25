@@ -3,7 +3,8 @@ module Bot.Telegram.Internal.Types
     ( TelegramUpdate,
       TelegramMessageSend,
       TelegramMessageGet,
-      TelegramGettable(..))
+      TelegramGettable(..),
+      TelegramResult(..))
 where
 
 import           Control.Applicative (Alternative ((<|>)))
@@ -29,13 +30,19 @@ import           Handlers.Bot        (CallbackQuery (..), Command (..),
                                       SendContent (..), Update (..),
                                       UpdateContent (..), UserInfo (..))
 
+-- | Type for telegram response
+newtype TelegramResult a = TelegramResult a deriving Show
+instance (FromJSON a) => FromJSON (TelegramResult a) where
+    parseJSON (Object o) = TelegramResult <$> o .: "result"
+    parseJSON _          = mempty
+
 -- | Instances for UserInfo
 instance Hashable UserInfo
 instance FromJSON UserInfo where
     parseJSON (Object o) = UserInfo <$> (o .: "from" >>= (.: "id")) <*> (o .: "chat" >>= (.: "id"))
     parseJSON _ = mempty
 
--- | Type for telegram
+-- | Type for telegram gettable content
 data TelegramGettable = GText String (Maybe [Entity]) | GSticker String
     deriving (Show)
 instance IsString TelegramGettable where

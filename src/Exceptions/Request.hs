@@ -12,4 +12,4 @@ import           Exceptions.Request.Web   (WebException (..))
 
 data RequestException = RWebException WebException | RParseException ParseException | RBodyException BodyException
     deriving (Show)
-instance Exception RequestException where
+instance Exception RequestException
