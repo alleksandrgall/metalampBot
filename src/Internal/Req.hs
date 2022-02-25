@@ -24,16 +24,12 @@ import           Network.HTTP.Req       (GET (GET), LbsResponse,
                                          (=:))
 
 
-newtype Result a = Result a
-instance (FromJSON a) => FromJSON (Result a) where
-    parseJSON (Object o) = Result <$> o .: "result"
-    parseJSON _          = mempty
 
 parseResponse :: (FromJSON response, MonadCatch m, Show response) => L.Handle m -> B.ByteString -> m response
 parseResponse hLogger respBody = case eitherDecode respBody of
-    Right (Result body) -> do
-        L.debug hLogger (L.JustText (pack . show $ body))
-        return body
+    Right result -> do
+        L.debug hLogger (L.JustText (pack . show $ result))
+        return result
     Left e     -> do
         L.error hLogger $ L.WithBs ("Parsing failed due to mismatching type, error:\n\t" <> fromString e) respBody
         throwM $ RParseException . WrongType . fromString $ e

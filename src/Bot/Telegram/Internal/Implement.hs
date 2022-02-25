@@ -2,6 +2,7 @@ module Bot.Telegram.Internal.Implement (Config(..), parseConfig, withHandle) whe
 
 import           Bot.Telegram.Internal.Types (TelegramGettable (GSticker),
                                               TelegramMessageSend,
+                                              TelegramResult (..),
                                               TelegramUpdate)
 import           Config
 import           Control.Concurrent          (threadDelay)
@@ -27,6 +28,8 @@ import qualified Handlers.Bot                as B
 import qualified Handlers.Logger             as L
 import           Internal.Req                (makeRequest, parseResponse)
 import           Internal.Types              (Protocol (Https))
+
+apiVersion = 5.131
 
 parseConfig :: AppConfig -> Config
 parseConfig AppConfig {..} = Config {
@@ -92,7 +95,7 @@ initTg token hL = do
     return ()
 
 getUpdatesTg :: (MonadMask m, MonadIO m) => String -> L.Handle m -> Int64 -> m [TelegramUpdate]
-getUpdatesTg token hL offset = parseResponse hL =<< tgRequest token hL (Nothing :: Maybe String) "getUpdates"
+getUpdatesTg token hL offset = (\(TelegramResult x) -> return x) =<< parseResponse hL =<< tgRequest token hL (Nothing :: Maybe String) "getUpdates"
     [("offset", pack . show $ offset),
      ("timeout", pack . show $ 1)]
 

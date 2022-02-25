@@ -28,6 +28,7 @@ library
       Bot.Telegram
       Bot.Telegram.Internal.Implement
       Bot.Telegram.Internal.Types
+      Bot.VK.Implemet
       Config
       Exceptions.Request
       Exceptions.Request.Body
