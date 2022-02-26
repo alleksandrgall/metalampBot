@@ -39,9 +39,8 @@ data UserInfo = UserInfo {
 } deriving (Generic, Show, Eq, Ord)
 
 data MessageGet gettable = MessageGet {
-    mgUserInfo  :: UserInfo
-  , mgMessageId :: Int
-  , mgContent   :: gettable
+    mgUserInfo :: UserInfo
+  , mgContent  :: gettable
 } deriving (Show, Eq)
 
 data SendContent gettable = CGettable gettable | CKeyboard Text Keyboard

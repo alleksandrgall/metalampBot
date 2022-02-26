@@ -143,8 +143,8 @@ processCommand = hspec $ do
 processMessage :: IO ()
 processMessage = hspec $ do
   describe "Handlers.Bot.processMessage" $ do
-    let messageTarget1 = B.MessageGet targetUser1 0 "Hello"
-        messageTarget2 = B.MessageGet targetUser2 0 (GSticker 123456)
+    let messageTarget1 = B.MessageGet targetUser1 "Hello"
+        messageTarget2 = B.MessageGet targetUser2 (GSticker 123456)
         targetUser1 = B.UserInfo 5 6
         targetUser2 = B.UserInfo 2 3
 
@@ -167,7 +167,7 @@ processUpdates :: IO ()
 processUpdates = hspec $ do
   describe "Handlers.Bot.processUpdates" $ do
     let cbExample = B.UCCallbackQuary (B.CallbackQuery (B.UserInfo 1 1) "cbId" "1")
-        mesExample = B.UCMessage (B.MessageGet (B.UserInfo 2 2) 0 "message")
+        mesExample = B.UCMessage (B.MessageGet (B.UserInfo 2 2) "message")
         comExample = B.UCCommand (B.Command (B.UserInfo 3 3) B.Start)
 
     it "updates offset to be the highest update id of the updates being processed plus 1" $ do
