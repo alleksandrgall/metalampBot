@@ -8,6 +8,7 @@ module Bot.Telegram.Internal.Types
 where
 
 import           Control.Applicative (Alternative ((<|>)))
+import           Control.Monad       (guard)
 import           Data.Aeson          (FromJSON (parseJSON), KeyValue ((.=)),
                                       Options (fieldLabelModifier),
                                       ToJSON (toEncoding, toJSON),
@@ -73,7 +74,6 @@ type TelegramMessageGet = MessageGet TelegramGettable
 instance FromJSON TelegramMessageGet where
     parseJSON (Object o) = MessageGet <$>
         parseJSON (Object o) <*>
-         o .: "message_id" <*>
         ((GSticker <$> (o .: "sticker" >>= (.: "file_id")))
         <|>
         (GText <$> (o .: "text") <*> (o .:? "entities")))
@@ -100,12 +100,11 @@ instance FromJSON Command where
         maybe mempty pure (commandFromString (take finish $ drop start txt) ui)
         where
             findBotCommand :: [Value] -> Parser (Int, Int)
-            findBotCommand ar = mconcat $ map
+            findBotCommand = mconcat . map
                 (withObject "" $ \e -> do
                     t <- (e .: "type" :: Parser String)
-                    if t == "bot_command"
-                        then (,) <$> e .: "offset" <*> e .: "length"
-                        else mempty) ar
+                    guard (t == "bot_command")
+                    (,) <$> e .: "offset" <*> e .: "length")
             {-# INLINE findBotCommand #-}
     parseJSON _ = mempty
 
