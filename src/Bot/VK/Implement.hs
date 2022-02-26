@@ -1,4 +1,4 @@
-module Bot.VK where
+module Bot.VK.Implement where
 import           Config
 import           Control.Monad.Catch          (MonadMask)
 import           Control.Monad.IO.Class       (MonadIO (liftIO))

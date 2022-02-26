@@ -17,7 +17,6 @@ import           Data.Aeson          (FromJSON (parseJSON), KeyValue ((.=)),
                                       genericToEncoding, genericToJSON, object,
                                       withArray, withObject, (.:), (.:?))
 import           Data.Aeson.Types    (Parser)
-import           Data.Char           (toLower)
 import           Data.Foldable       (Foldable (toList))
 import           Data.Hashable       (Hashable)
 import           Data.Int            (Int64)
@@ -30,6 +29,7 @@ import           Handlers.Bot        (CallbackQuery (..), Command (..),
                                       MessageGet (..), MessageSend (..),
                                       SendContent (..), Update (..),
                                       UpdateContent (..), UserInfo (..))
+import           Internal.Utils      (commandFromString)
 
 -- | Type for telegram response
 newtype TelegramResult a = TelegramResult a deriving Show
@@ -107,13 +107,6 @@ instance FromJSON Command where
                     (,) <$> e .: "offset" <*> e .: "length")
             {-# INLINE findBotCommand #-}
     parseJSON _ = mempty
-
-commandFromString :: String -> UserInfo -> Maybe Command
-commandFromString c ui = case map toLower c of
-    "/repeat" -> Just $ Command ui Repeat
-    "/help"   -> Just $ Command ui Help
-    "/start"  -> Just $ Command ui Start
-    _         -> Nothing
 
 -- | Type and Aeson instances for telegram updates
 -- Order of parsers for Update content matters, command parser should be the first one
