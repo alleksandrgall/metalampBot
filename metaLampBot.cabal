@@ -28,7 +28,8 @@ library
       Bot.Telegram
       Bot.Telegram.Internal.Implement
       Bot.Telegram.Internal.Types
-      Bot.VK.Implemet
+      Bot.VK.Implement
+      Bot.VK.Types
       Config
       Exceptions.Request
       Exceptions.Request.Body
@@ -38,6 +39,7 @@ library
       Handlers.Logger
       Internal.Req
       Internal.Types
+      Internal.Utils
       Logger.IO
       Logger.IO.Implement
   other-modules:
