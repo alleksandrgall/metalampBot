@@ -20,7 +20,7 @@ import           GHC.Exts                     (IsList (fromList))
 import qualified Handlers.Bot                 as B
 import qualified Handlers.Logger              as L
 import           Prelude                      hiding (lookup)
-import           Test.Hspec                   (describe, hspec, it,
+import           Test.Hspec                   (context, describe, hspec, it,
                                                shouldSatisfy)
 import           Test.QuickCheck              (Testable (property), elements,
                                                forAll)
@@ -65,7 +65,7 @@ mockHandle = B.Handle {
         , hLogger             = mockLogger
         , hInit               = return ()
         , hSleep              = \_ -> return ()
-        , hGetUpdates         = \offset -> asks (filter (\B.Update {..} -> uId >= offset))
+        , hGetUpdates         = \offset -> asks (\upds -> if null upds then (Nothing, upds) else (Just 1, upds))
         , hSendMes            = \B.MessageSend {..} -> tell [Message msUserInfo msContent]
         , hAnswerCallback     = \t cb               -> tell [CBAnswer t cb]
         , hGetOffset          = fst <$> get
@@ -156,7 +156,7 @@ processMessage = hspec $ do
             replicate 2 (Message targetUser2 (B.CGettable . GSticker $ 123456))
       run sending `shouldSatisfy` (\(_, _, send) -> send == shouldBeSend)
 
-    it "if user's number of repeats is not benn set sends message as many times as the default number of repeats (cBaseRepeat)" $ do
+    it "if user's number of repeats has not been set sends message as many times as the default number of repeats (cBaseRepeat)" $ do
       let run m = runRWS m [] (0, mempty)
           mockHandle' = mockHandle {B.hConfig = (mockHandle & B.hConfig) {B.cBaseRepeat = 4}, B.hGetUserRepeat = \_ -> return Nothing}
           sending = B.processMessage mockHandle' messageTarget1
@@ -166,19 +166,22 @@ processMessage = hspec $ do
 processUpdates :: IO ()
 processUpdates = hspec $ do
   describe "Handlers.Bot.processUpdates" $ do
-    let cbExample = B.UCCallbackQuary (B.CallbackQuery (B.UserInfo 1 1) "cbId" "1")
-        mesExample = B.UCMessage (B.MessageGet (B.UserInfo 2 2) "message")
-        comExample = B.UCCommand (B.Command (B.UserInfo 3 3) B.Start)
+    let cbExample = B.UCallbackQuary (B.CallbackQuery (B.UserInfo 1 1) "cbId" "1")
+        mesExample = B.UMessage (B.MessageGet (B.UserInfo 2 2) "message")
+        comExample = B.UCommand (B.Command (B.UserInfo 3 3) B.Start)
 
-    it "updates offset to be the highest update id of the updates being processed plus 1" $ do
-      let run m = runRWS m [B.Update 14 mesExample, B.Update 2 mesExample, B.Update 17 mesExample, B.Update 5 mesExample] (0, mempty)
-      run ((mockHandle & B.hGetOffset) >>= (mockHandle & B.hGetUpdates) >>= B.processUpdates mockHandle)
-        `shouldSatisfy` (\(_, (offset, _), _) -> offset == 18)
+    context "On receiving some updates" $
+      it "processes update's content" $ do
+        let run m = runRWS m [mesExample, cbExample, comExample] (0, mempty)
+            shouldBeSend = replicate (mockHandle & B.hConfig & B.cBaseRepeat) (Message (B.UserInfo 2 2) "message") ++
+              [CBAnswer (mockHandle & B.hConfig & B.cRepeatMes) (B.CallbackQuery (B.UserInfo 1 1) "cbId" "1")] ++
+              [Message (B.UserInfo 3 3) (B.CGettable . fromString . unpack $ mockHandle & B.hConfig & B.cStartMes)]
+        run ((mockHandle & B.hGetOffset) >>= (mockHandle & B.hGetUpdates) >>= uncurry (B.processUpdates mockHandle))
+          `shouldSatisfy` (\(_, _, send) -> send == shouldBeSend)
 
-    it "processing update's content" $ do
-      let run m = runRWS m [B.Update 14 mesExample, B.Update 2 cbExample, B.Update 17 comExample] (0, mempty)
-          shouldBeSend = replicate (mockHandle & B.hConfig & B.cBaseRepeat) (Message (B.UserInfo 2 2) "message") ++
-            [CBAnswer (mockHandle & B.hConfig & B.cRepeatMes) (B.CallbackQuery (B.UserInfo 1 1) "cbId" "1")] ++
-            [Message (B.UserInfo 3 3) (B.CGettable . fromString . unpack $ mockHandle & B.hConfig & B.cStartMes)]
-      run ((mockHandle & B.hGetOffset) >>= (mockHandle & B.hGetUpdates) >>= B.processUpdates mockHandle)
-        `shouldSatisfy` (\(_, _, send) -> send == shouldBeSend)
+    context "On receiving no updates" $
+      it "does nothing" $ do
+        let run m = runRWS m [] (0, mempty)
+            shouldBeSend = []
+        run ((mockHandle & B.hGetOffset) >>= (mockHandle & B.hGetUpdates) >>= uncurry (B.processUpdates mockHandle))
+          `shouldSatisfy` (\(_, _, send) -> send == shouldBeSend)

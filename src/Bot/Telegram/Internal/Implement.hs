@@ -3,7 +3,8 @@ module Bot.Telegram.Internal.Implement (Config(..), parseConfig, withHandle) whe
 import           Bot.Telegram.Internal.Types (TelegramGettable (GSticker),
                                               TelegramMessageSend,
                                               TelegramResult (..),
-                                              TelegramUpdate)
+                                              TelegramUpdate,
+                                              TelegramUpdateWithId (..))
 import           Config
 import           Control.Concurrent          (threadDelay)
 import           Control.Monad               (void)
@@ -28,6 +29,7 @@ import qualified Handlers.Bot                as B
 import qualified Handlers.Logger             as L
 import           Internal.Req                (makeRequest, parseResponse)
 import           Internal.Types              (Protocol (Https))
+import           Internal.Utils
 
 apiVersion = 5.131
 
@@ -94,10 +96,14 @@ initTg token hL = do
          "setMyCommands" []
     return ()
 
-getUpdatesTg :: (MonadMask m, MonadIO m) => String -> L.Handle m -> Int64 -> m [TelegramUpdate]
-getUpdatesTg token hL offset = (\(TelegramResult x) -> return x) =<< parseResponse hL =<< tgRequest token hL (Nothing :: Maybe String) "getUpdates"
-    [("offset", pack . show $ offset),
-     ("timeout", pack . show $ 1)]
+getUpdatesTg :: (MonadMask m, MonadIO m) => String -> L.Handle m -> Int64 -> m (Maybe Int64, [TelegramUpdate])
+getUpdatesTg token hL offset = do
+    TelegramResult idUpds <- parseResponse hL =<< tgRequest token hL (Nothing :: Maybe String) "getUpdates"
+     [("offset", pack . show $ offset),
+     ("timeout", pack . show $ 2)]
+    let (lastUId, upds) = foldr (\TelegramUpdateWithId{..} (curMax, res) ->
+            if curMax < Just uId then (Just uId, uCont:res) else (curMax, uCont:res)) (Nothing, []) (idUpds :: [TelegramUpdateWithId])
+    return ((+1) <$> lastUId, upds)
 
 sendMesTg :: (MonadMask m, MonadIO m) => String -> L.Handle m -> TelegramMessageSend -> m ()
 sendMesTg token hL tgMes = case tgMes & B.msContent of
