@@ -1,7 +1,6 @@
+{-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Use newtype instead of data" #-}
 module Bot where
 
 import           Control.Monad                (Monad (..), mapM_, when)
@@ -17,6 +16,7 @@ import           Data.Int                     (Int64)
 import           Data.String                  (IsString (..), String)
 import           Data.Text                    (Text, pack, unpack)
 import           GHC.Exts                     (IsList (fromList))
+import           GHC.Generics                 (Generic)
 import qualified Handlers.Bot                 as B
 import qualified Handlers.Logger              as L
 import           Prelude                      hiding (lookup)
@@ -24,7 +24,12 @@ import           Test.Hspec                   (context, describe, hspec, it,
                                                shouldSatisfy)
 import           Test.QuickCheck              (Testable (property), elements,
                                                forAll)
-instance Hashable B.UserInfo
+
+data TestUserInfo = TestUserInfo {
+    uId    :: Int
+  , chatId :: Int
+} deriving (Show, Eq, Generic, Ord)
+instance Hashable TestUserInfo
 
 data Gettable = GText String | GSticker Int64
     deriving (Show, Eq)
@@ -34,16 +39,16 @@ instance IsString Gettable where
 
 data ServerContent = CBAnswer {
     cbAnswerMes :: Text
-  , cbAnswerId  :: B.CallbackQuery
+  , cbAnswerId  :: B.CallbackQuery TestUserInfo
   } |
   Message {
-      mesUi      :: B.UserInfo
+      mesUi      :: TestUserInfo
     , mesContent :: B.SendContent Gettable
   } deriving (Show, Eq)
 
 type Server = [ServerContent]
 
-type TestEnv = RWS [B.Update Gettable] Server (Int64, HashMap B.UserInfo Int)
+type TestEnv = RWS [B.Update Gettable TestUserInfo] Server (Int64, HashMap TestUserInfo Int)
 
 mockConfig = B.Config {
     cBaseRepeat        = 1
@@ -59,12 +64,11 @@ mockLogger = L.Handle {
   , L.hLogMessage = \_ _ -> return ()
 }
 
-mockHandle :: B.Handle Gettable TestEnv
+mockHandle :: B.Handle Gettable TestUserInfo TestEnv
 mockHandle = B.Handle {
           hConfig             = mockConfig
         , hLogger             = mockLogger
         , hInit               = return ()
-        , hSleep              = \_ -> return ()
         , hGetUpdates         = \offset -> asks (\upds -> if null upds then (Nothing, upds) else (Just 1, upds))
         , hSendMes            = \B.MessageSend {..} -> tell [Message msUserInfo msContent]
         , hAnswerCallback     = \t cb               -> tell [CBAnswer t cb]
@@ -81,7 +85,7 @@ processCallback = hspec $ do
         run m               = runRWS m [] (0, mempty)
 
     it "sends an answer if the callback data is allowed" $ do
-      let allowedCallBacks  = map (\s -> B.CallbackQuery (B.UserInfo 0 0) (s <> "id") s) allowedCallbackData
+      let allowedCallBacks  = map (\s -> B.CallbackQuery (TestUserInfo 0 0) (s <> "id") s) allowedCallbackData
           send              = map (CBAnswer (mockHandle & B.hConfig & B.cRepeatMes)) allowedCallBacks
       run (mapM_ (B.processCallback mockHandle) allowedCallBacks) `shouldSatisfy` (\(_, _, server) -> server == send)
 
@@ -90,8 +94,8 @@ processCallback = hspec $ do
         forAll (elements allowedCallbackData) $ \changeToThat ->
         let toBeChangedRepeatNum = 4
             otherRepNums = [1, 2, 3, 5]
-            otherUsersInfo = [uncurry B.UserInfo (x, x) | x <- [1 .. 4]]
-            targetUserInfo = uncurry B.UserInfo targetUser
+            otherUsersInfo = [uncurry TestUserInfo (x, x) | x <- [1 .. 4]]
+            targetUserInfo = uncurry TestUserInfo targetUser
             userRepeats    = fromList $ (targetUserInfo, toBeChangedRepeatNum) : zip otherUsersInfo otherRepNums
             callBack       = B.CallbackQuery targetUserInfo "cbId" changeToThat
             (_, (_, newUserRepeats), _) = run $ put (0, userRepeats) >> B.processCallback mockHandle callBack
@@ -103,8 +107,8 @@ processCallback = hspec $ do
       property $ \targetUser changeToThat->
         let toBeChangedRepeatNum = 4
             otherRepNums = [1, 2, 3, 5]
-            otherUsersInfo = [uncurry B.UserInfo (x, x) | x <- [1 .. 4]]
-            targetUserInfo = uncurry B.UserInfo targetUser
+            otherUsersInfo = [uncurry TestUserInfo (x, x) | x <- [1 .. 4]]
+            targetUserInfo = uncurry TestUserInfo targetUser
             userRepeats    = fromList $ (targetUserInfo, toBeChangedRepeatNum) : zip otherUsersInfo otherRepNums
             callBack       = B.CallbackQuery targetUserInfo "cbId" (show changeToThat)
             (_, (_, newUserRepeats), server) = run $
@@ -119,22 +123,22 @@ processCommand = hspec $ do
 
     it "on start sends start message (cStartMes)" $ do
       property $ \targetUser ->
-        let targetUserInfo = uncurry B.UserInfo targetUser
-            (_, _, send) = run $ B.processCommand mockHandle (B.Command (uncurry B.UserInfo targetUser) B.Start)
+        let targetUserInfo = uncurry TestUserInfo targetUser
+            (_, _, send) = run $ B.processCommand mockHandle (B.Command (uncurry TestUserInfo targetUser) B.Start)
             shouldHaveBeenSend = [Message targetUserInfo (B.CGettable . GText . unpack $ mockHandle & B.hConfig & B.cStartMes)]
         in send == shouldHaveBeenSend
 
     it "on help sends help message (cHelpMes)" $ do
       property $ \targetUser ->
-        let targetUserInfo = uncurry B.UserInfo targetUser
-            (_, _, send) = run $ B.processCommand mockHandle (B.Command (uncurry B.UserInfo targetUser) B.Help)
+        let targetUserInfo = uncurry TestUserInfo targetUser
+            (_, _, send) = run $ B.processCommand mockHandle (B.Command (uncurry TestUserInfo targetUser) B.Help)
             shouldHaveBeenSend = [Message targetUserInfo (B.CGettable . GText . unpack $ mockHandle & B.hConfig & B.cHelpMes)]
         in send == shouldHaveBeenSend
 
     it "on repeat sends keyboard and repeat message (cRepeatKeyboardMes)" $ do
       property $ \targetUser ->
-        let targetUserInfo = uncurry B.UserInfo targetUser
-            (_, _, send) = run $ B.processCommand mockHandle (B.Command (uncurry B.UserInfo targetUser) B.Repeat)
+        let targetUserInfo = uncurry TestUserInfo targetUser
+            (_, _, send) = run $ B.processCommand mockHandle (B.Command (uncurry TestUserInfo targetUser) B.Repeat)
             keyboardMessage = mockHandle & B.hConfig & B.cRepeatKeyboardMes
             keyboardInfo    = [(pack . show $ x, pack . show $ x) | x <- [1 .. 5]]
             shouldHaveBeenSend = [Message targetUserInfo (B.CKeyboard keyboardMessage (B.Keyboard keyboardInfo))]
@@ -145,8 +149,8 @@ processMessage = hspec $ do
   describe "Handlers.Bot.processMessage" $ do
     let messageTarget1 = B.MessageGet targetUser1 "Hello"
         messageTarget2 = B.MessageGet targetUser2 (GSticker 123456)
-        targetUser1 = B.UserInfo 5 6
-        targetUser2 = B.UserInfo 2 3
+        targetUser1 = TestUserInfo 5 6
+        targetUser2 = TestUserInfo 2 3
 
     it "sends message to the user it came from as many times as the number of repits of the user" $ do
       let userRepeats = fromList [(targetUser2, 2), (targetUser1, 3)]
@@ -166,16 +170,16 @@ processMessage = hspec $ do
 processUpdates :: IO ()
 processUpdates = hspec $ do
   describe "Handlers.Bot.processUpdates" $ do
-    let cbExample = B.UCallbackQuary (B.CallbackQuery (B.UserInfo 1 1) "cbId" "1")
-        mesExample = B.UMessage (B.MessageGet (B.UserInfo 2 2) "message")
-        comExample = B.UCommand (B.Command (B.UserInfo 3 3) B.Start)
+    let cbExample = B.UCallbackQuary (B.CallbackQuery (TestUserInfo 1 1) "cbId" "1")
+        mesExample = B.UMessage (B.MessageGet (TestUserInfo 2 2) "message")
+        comExample = B.UCommand (B.Command (TestUserInfo 3 3) B.Start)
 
     context "On receiving some updates" $
       it "processes update's content" $ do
         let run m = runRWS m [mesExample, cbExample, comExample] (0, mempty)
-            shouldBeSend = replicate (mockHandle & B.hConfig & B.cBaseRepeat) (Message (B.UserInfo 2 2) "message") ++
-              [CBAnswer (mockHandle & B.hConfig & B.cRepeatMes) (B.CallbackQuery (B.UserInfo 1 1) "cbId" "1")] ++
-              [Message (B.UserInfo 3 3) (B.CGettable . fromString . unpack $ mockHandle & B.hConfig & B.cStartMes)]
+            shouldBeSend = replicate (mockHandle & B.hConfig & B.cBaseRepeat) (Message (TestUserInfo 2 2) "message") ++
+              [CBAnswer (mockHandle & B.hConfig & B.cRepeatMes) (B.CallbackQuery (TestUserInfo 1 1) "cbId" "1")] ++
+              [Message (TestUserInfo 3 3) (B.CGettable . fromString . unpack $ mockHandle & B.hConfig & B.cStartMes)]
         run ((mockHandle & B.hGetOffset) >>= (mockHandle & B.hGetUpdates) >>= uncurry (B.processUpdates mockHandle))
           `shouldSatisfy` (\(_, _, send) -> send == shouldBeSend)
 

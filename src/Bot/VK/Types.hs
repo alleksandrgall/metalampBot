@@ -11,8 +11,17 @@ import           Data.Int            (Int64)
 import           Data.String         (IsString)
 import           Data.Text           (Text, pack)
 import           GHC.Exts            (IsString (fromString))
+import           GHC.Generics        (Generic)
 import           Handlers.Bot
 import           Internal.Utils
+
+-- | Type for VK user info and instances
+data VKUserInfo = VKUserInfo {
+      uiId     :: Int64
+    , uiChatId :: Maybe Int64
+} deriving (Eq, Generic, Ord)
+instance Show VKUserInfo where
+    show VKUserInfo {..} = "user_id: " <> show uiId <> maybe "" (\i -> "chat_id: " <> show i) uiChatId
 
 -- | Type for VK result of a response
 newtype VKResult a = VKResult a deriving Show
@@ -20,10 +29,8 @@ instance (FromJSON a) => FromJSON (VKResult a) where
     parseJSON (Object o) = VKResult <$> o .: "response"
     parseJSON _          = mempty
 
--- | Instances for UserInfo
-instance Hashable UserInfo
-instance FromJSON UserInfo where
-    parseJSON (Object o) = UserInfo <$> (o .: "from_id") <*> (o .: "peer_id")
+instance FromJSON VKUserInfo where
+    parseJSON (Object o) = VKUserInfo <$> (o .: "from_id") <*> fmap (fmap (\x -> x - 2000000000)) (o .:? "peer_id")
     parseJSON _          = mempty
 
 --(o .: "type" >>= \t -> guard (t == "message_new")) >>
@@ -47,27 +54,27 @@ instance FromJSON VKGettable where
     parseJSON _ = mempty
 
 -- | Type for vk gettable message
-type VKMessageGet = MessageGet VKGettable
+type VKMessageGet = MessageGet VKGettable VKUserInfo
 
 instance FromJSON VKMessageGet where
     parseJSON (Object o) = MessageGet <$> parseJSON (Object o) <*> parseJSON (Object o)
     parseJSON _          = mempty
 
 -- | Type for vk sendable message
-type VKMessageSend = MessageSend VKGettable
+type VKMessageSend = MessageSend VKGettable VKUserInfo
 
 instance ToJSON VKMessageSend where
     toJSON MessageSend {..} = undefined
 
 -- | Type for vk command
-instance FromJSON Command where
+instance FromJSON (Command VKUserInfo) where
     parseJSON obj = parseJSON obj >>= \MessageGet{..} -> do
         case mgContent of
             GText txt -> maybe mempty pure (commandFromString txt mgUserInfo)
             _         -> mempty
 
 -- | Type for vk callback query
-instance FromJSON CallbackQuery where
+instance FromJSON (CallbackQuery VKUserInfo) where
     parseJSON (Object o) = undefined
     parseJSON _          = mempty
 

@@ -40,7 +40,6 @@ withHandle Config {..} hL f = do
           hConfig             = undefined
         , hLogger             = undefined
         , hInit               = undefined
-        , hSleep              = undefined
         , hGetUpdates         = undefined
         , hSendMes            = undefined
         , hAnswerCallback     = undefined
