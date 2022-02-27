@@ -16,13 +16,13 @@ module Handlers.Bot
   ,Command(..)
   ,CommandType(..)
   ,Update(..)
-  ,UpdateContent(..)
   ,CallbackQuery(..)
   ,Keyboard(..)
   ) where
 
 import           Control.Monad       (foldM, forever, replicateM_, unless, when)
 import           Control.Monad.Catch (MonadCatch, MonadThrow (throwM), handle)
+import           Data.Foldable       (traverse_)
 import           Data.Function       ((&))
 import           Data.Int            (Int64)
 import           Data.Maybe          (fromJust, isNothing)
@@ -53,13 +53,6 @@ data MessageSend gettable = MessageSend {
   , msContent  :: SendContent gettable
 } deriving (Show, Eq)
 
-data UpdateContent gettable =
-    UCCallbackQuary CallbackQuery |
-    UCMessage (MessageGet gettable) |
-    UCCommand Command |
-    UnknownUpdate
-    deriving (Show, Eq)
-
 data CallbackQuery = CallbackQuery {
       cbUserInfo :: UserInfo
     , cbId       :: String
@@ -82,10 +75,12 @@ instance Show CommandType where
   show Repeat = "/repeat"
   show Start  = "/start"
 
-data Update gettable  = Update {
-    uId     :: Int64
-  , uUpdate :: UpdateContent gettable
-  } deriving (Show, Eq)
+data Update gettable =
+    UCallbackQuary CallbackQuery |
+    UMessage (MessageGet gettable) |
+    UCommand Command |
+    UnknownUpdate
+    deriving (Show, Eq)
 
 newtype Keyboard = Keyboard [(Text, Text)] deriving (Show, Eq)
 
@@ -104,7 +99,7 @@ data Handle gettable m = Handle {
   , hInit             :: (Monad m) => m ()
   , hSleep            :: Int -> m ()
   , hGetUpdates       :: (Monad m) =>
-      Int64 -> m [Update gettable]
+      Int64 -> m (Maybe Int64, [Update gettable])
   , hSendMes          :: (IsString gettable, Monad m) =>
       MessageSend gettable -> m ()
   -- | Notify the server and the user that button press was processed
@@ -124,27 +119,24 @@ runBot h@Handle {..} = do
   L.info hLogger $ L.JustText "Bot has been initialized."
   forever (go h)
   where
-    go h@Handle {..} = hGetOffset >>= hGetUpdates >>= (\us -> unless (null us)
-      (L.info hLogger (L.JustText "Got updates.") >> processUpdates h us))
+    go h@Handle {..} = hGetOffset >>= hGetUpdates >>= (\(newOffset, uls) -> unless (isNothing newOffset)
+      (L.info hLogger (L.JustText "Got updates.") >> processUpdates h newOffset uls))
 
 processUpdates :: (Monad m, IsString gettable) =>
-  Handle gettable  m -> [Update gettable] -> m ()
-processUpdates h@Handle {..} uls = do
+  Handle gettable  m -> Maybe Int64 -> [Update gettable] -> m ()
+processUpdates h@Handle {..} newOffset uls = do
   L.info hLogger $ L.JustText "Processing updates..."
-  currentOffset <- hGetOffset
-  newOffset <- foldM (\maxOffset (Update uId uc) -> do
-    processUpdateContent h uc
-    if uId >= maxOffset then return uId else return maxOffset) currentOffset uls
+  traverse_ (processUpdateContent h) uls
   L.info hLogger $ L.JustText "Updates were processed."
-  hSetOffset (newOffset + 1)
+  maybe (return ()) hSetOffset newOffset
     where
       processUpdateContent h@Handle {..} = \case
-        UCCallbackQuary cb -> processCallback h cb
-        UCCommand c        -> processCommand h c
-        UCMessage m        -> processMessage h m
-        UnknownUpdate      -> return ()
+        UCallbackQuary cb -> processCallback h cb
+        UCommand c        -> processCommand h c
+        UMessage m        -> processMessage h m
+        UnknownUpdate     -> return ()
 
-processCallback :: (Monad m) => Handle gettable m -> CallbackQuery  -> m ()
+processCallback :: (Monad m) => Handle gettable m -> CallbackQuery -> m ()
 processCallback Handle {..} cb = do
   L.info hLogger $ L.JustText ("Processing callback from the " <> showUi (cb & cbUserInfo) <> "...")
   let mNewRepeat = ((readMaybe $ cb & cbData) :: Maybe Int)

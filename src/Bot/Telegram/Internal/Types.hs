@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 module Bot.Telegram.Internal.Types
     ( TelegramUpdate,
+      TelegramUpdateWithId(..),
       TelegramMessageSend,
       TelegramMessageGet,
       TelegramGettable(..),
@@ -28,7 +29,7 @@ import           Handlers.Bot        (CallbackQuery (..), Command (..),
                                       CommandType (..), Keyboard (..),
                                       MessageGet (..), MessageSend (..),
                                       SendContent (..), Update (..),
-                                      UpdateContent (..), UserInfo (..))
+                                      UserInfo (..))
 import           Internal.Utils      (commandFromString)
 
 -- | Type for telegram response
@@ -45,7 +46,7 @@ instance FromJSON UserInfo where
 
 -- | Type for telegram gettable content
 data TelegramGettable = GText String (Maybe [Entity]) | GSticker String
-    deriving (Show)
+    deriving (Show, Eq)
 instance IsString TelegramGettable where
     fromString s = GText s Nothing
 
@@ -109,15 +110,27 @@ instance FromJSON Command where
     parseJSON _ = mempty
 
 -- | Type and Aeson instances for telegram updates
--- Order of parsers for Update content matters, command parser should be the first one
+-- Order of parsers for Update constructors matters, command parser should be the first one
 type TelegramUpdate = Update TelegramGettable
+data TelegramUpdateWithId = TelegramUpdateWithId {
+      uId   :: Int64
+    , uCont :: Update TelegramGettable
+} deriving (Show, Eq)
+instance Ord TelegramUpdateWithId where
+    idUpd1 <= idUpd2 = uId idUpd1 <= uId idUpd2
+
 instance FromJSON TelegramUpdate where
-    parseJSON (Object o) = Update <$> o .: "update_id" <*>
-        ((o .: "message" >>= (\m -> UCCommand <$> parseJSON m <|> UCMessage <$> parseJSON m))
+    parseJSON (Object o) =
+        (o .: "message" >>=
+            (\m -> UCommand <$> parseJSON m <|> UMessage <$> parseJSON m))
         <|>
-        (o .: "callback_query" >>= (fmap UCCallbackQuary . parseJSON))
+        (o .: "callback_query" >>= (fmap UCallbackQuary . parseJSON))
         <|>
-        pure UnknownUpdate)
+        pure UnknownUpdate
+    parseJSON _ = mempty
+
+instance FromJSON TelegramUpdateWithId where
+    parseJSON (Object o) = TelegramUpdateWithId <$> o .: "update_id" <*> parseJSON (Object o)
     parseJSON _ = mempty
 
 data Entity = Entity {
@@ -127,7 +140,7 @@ data Entity = Entity {
     , eUrl      :: Maybe String
     , eUser     :: Maybe EntityUser
     , eLanguage :: Maybe String
-}   deriving (Show, Generic)
+}   deriving (Show, Generic, Eq)
 
 instance ToJSON Entity where
     toJSON = genericToJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "e"}
@@ -139,7 +152,7 @@ data EntityUser = EntityUser {
       euId        :: Int64
     , euIsBot     :: Bool
     , euFirstName :: String
-} deriving (Show, Generic)
+} deriving (Show, Generic, Eq)
 
 instance ToJSON EntityUser where
     toEncoding = genericToEncoding defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "eu"}
