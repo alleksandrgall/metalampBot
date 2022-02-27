@@ -26,8 +26,8 @@ source-repository head
 library
   exposed-modules:
       Bot.Telegram
-      Bot.Telegram.Internal.Implement
-      Bot.Telegram.Internal.Types
+      Bot.Telegram.Implement
+      Bot.Telegram.Types
       Bot.VK.Implement
       Bot.VK.Types
       Config

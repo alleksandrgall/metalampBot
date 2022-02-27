@@ -9,7 +9,6 @@ module Handlers.Bot
   ,processCallback
   ,processCommand
   ,processMessage
-  ,UserInfo(..)
   ,MessageGet(..)
   ,MessageSend(..)
   ,SendContent(..)
@@ -33,13 +32,8 @@ import qualified Handlers.Logger     as L
 import           Internal.Types      (Token)
 import           Text.Read           (readMaybe)
 
-data UserInfo = UserInfo {
-    uiId     :: Int64
-  , uiChatId :: Int64
-} deriving (Generic, Show, Eq, Ord)
-
-data MessageGet gettable = MessageGet {
-    mgUserInfo :: UserInfo
+data MessageGet gettable usInf = MessageGet {
+    mgUserInfo :: usInf
   , mgContent  :: gettable
 } deriving (Show, Eq)
 
@@ -48,19 +42,19 @@ data SendContent gettable = CGettable gettable | CKeyboard Text Keyboard
 
 instance (IsString gettable) => IsString (SendContent gettable) where
   fromString s = CGettable . fromString $ s
-data MessageSend gettable = MessageSend {
-    msUserInfo :: UserInfo
+data MessageSend gettable usInf = MessageSend {
+    msUserInfo :: usInf
   , msContent  :: SendContent gettable
 } deriving (Show, Eq)
 
-data CallbackQuery = CallbackQuery {
-      cbUserInfo :: UserInfo
+data CallbackQuery usInf = CallbackQuery {
+      cbUserInfo :: usInf
     , cbId       :: String
     , cbData     :: String
   } deriving (Show, Eq)
 
-data Command = Command {
-    cUserInfo    :: UserInfo
+data Command usInf = Command {
+    cUserInfo    :: usInf
   , cCommandType :: CommandType
 } deriving (Show, Eq)
 
@@ -75,10 +69,10 @@ instance Show CommandType where
   show Repeat = "/repeat"
   show Start  = "/start"
 
-data Update gettable =
-    UCallbackQuary CallbackQuery |
-    UMessage (MessageGet gettable) |
-    UCommand Command |
+data Update gettable usInf =
+    UCallbackQuary (CallbackQuery usInf) |
+    UMessage (MessageGet gettable usInf) |
+    UCommand (Command usInf) |
     UnknownUpdate
     deriving (Show, Eq)
 
@@ -93,26 +87,25 @@ data Config = Config {
   }
 
 -- | hInit, hGetUpdates, hSendMes, hAnsCB can throw a `Exceptions.Request.RequestException` or HttpException
-data Handle gettable m = Handle {
+data Handle gettable usInf m = Handle {
     hConfig           :: Config
   , hLogger           :: L.Handle m
   , hInit             :: (Monad m) => m ()
-  , hSleep            :: Int -> m ()
   , hGetUpdates       :: (Monad m) =>
-      Int64 -> m (Maybe Int64, [Update gettable])
+      Int64 -> m (Maybe Int64, [Update gettable usInf])
   , hSendMes          :: (IsString gettable, Monad m) =>
-      MessageSend gettable -> m ()
+      MessageSend gettable usInf -> m ()
   -- | Notify the server and the user that button press was processed
-  , hAnswerCallback   :: (Monad m) => Text -> CallbackQuery -> m ()
+  , hAnswerCallback   :: (Monad m) => Text -> CallbackQuery usInf -> m ()
   -- | Getters and setters for offset and repeat counter for each user
   , hGetOffset        :: m Int64
   , hSetOffset        :: Int64 -> m ()
-  , hInsertUserRepeat :: UserInfo -> Int -> m ()
-  , hGetUserRepeat    :: UserInfo -> m (Maybe Int)
+  , hInsertUserRepeat :: usInf -> Int -> m ()
+  , hGetUserRepeat    :: usInf -> m (Maybe Int)
 }
 
-runBot :: (Monad m, IsString gettable) =>
-  Handle gettable   m -> m ()
+runBot :: (Monad m, IsString gettable, Show usInf) =>
+  Handle gettable usInf m -> m ()
 runBot h@Handle {..} = do
   L.info hLogger $ L.JustText "Initializing bot..."
   hInit
@@ -122,8 +115,8 @@ runBot h@Handle {..} = do
     go h@Handle {..} = hGetOffset >>= hGetUpdates >>= (\(newOffset, uls) -> unless (isNothing newOffset)
       (L.info hLogger (L.JustText "Got updates.") >> processUpdates h newOffset uls))
 
-processUpdates :: (Monad m, IsString gettable) =>
-  Handle gettable  m -> Maybe Int64 -> [Update gettable] -> m ()
+processUpdates :: (Monad m, IsString gettable, Show usInf) =>
+  Handle gettable usInf m -> Maybe Int64 -> [Update gettable usInf] -> m ()
 processUpdates h@Handle {..} newOffset uls = do
   L.info hLogger $ L.JustText "Processing updates..."
   traverse_ (processUpdateContent h) uls
@@ -136,47 +129,45 @@ processUpdates h@Handle {..} newOffset uls = do
         UMessage m        -> processMessage h m
         UnknownUpdate     -> return ()
 
-processCallback :: (Monad m) => Handle gettable m -> CallbackQuery -> m ()
+processCallback :: (Monad m, Show usInf) => Handle gettable usInf m -> CallbackQuery usInf -> m ()
 processCallback Handle {..} cb = do
-  L.info hLogger $ L.JustText ("Processing callback from the " <> showUi (cb & cbUserInfo) <> "...")
+  L.info hLogger $ L.JustText ("Processing callback from the " <> (fromString .show $ (cb & cbUserInfo)) <> "...")
   let mNewRepeat = ((readMaybe $ cb & cbData) :: Maybe Int)
   case mNewRepeat of
-    Nothing -> L.warning hLogger $ L.JustText ("Bad callback from the " <> showUi (cb & cbUserInfo))
+    Nothing -> L.warning hLogger $ L.JustText ("Bad callback from the " <> (fromString . show $ (cb & cbUserInfo)))
     Just newRepeat -> if newRepeat `notElem` [1..5] then
-      L.warning hLogger $ L.JustText ("Bad callback from the " <> showUi (cb & cbUserInfo))
+      L.warning hLogger $ L.JustText ("Bad callback from the " <> (fromString .show $ (cb & cbUserInfo)))
       else do
         hInsertUserRepeat (cb & cbUserInfo) newRepeat
         hAnswerCallback (hConfig & cRepeatMes) cb
         L.info hLogger $ L.JustText
-          ("Repeat number of the " <> showUi (cb & cbUserInfo) <> " was adjusted and answer was send to the user\n\t" <>
-           "New number: " <> (pack . show $ newRepeat))
+          ("Repeat number of the " <> (fromString .show $ (cb & cbUserInfo)) <> " was adjusted and answer was send to the user\n\t" <>
+           "New number: " <> (fromString .show $ newRepeat))
 
-processCommand :: (IsString gettable, Monad m) =>
-  Handle gettable m -> Command  -> m ()
+processCommand :: (IsString gettable, Monad m, Show usInf) =>
+  Handle gettable usInf m -> Command usInf -> m ()
 processCommand Handle {..} Command {..} = do
-  L.info hLogger $ L.JustText ("Processing command " <> (pack . show $ cCommandType) <> " from the " <> showUi cUserInfo <> "...")
+  L.info hLogger $ L.JustText ("Processing command " <> (fromString .show $ cCommandType) <>
+    " from the " <> (fromString .show $ cUserInfo) <> "...")
   case cCommandType of
     Start -> do
       hSendMes $ MessageSend cUserInfo (fromString . unpack $ hConfig & cStartMes)
-      L.info hLogger $ L.JustText ("New user has been added, info:" <> showUi cUserInfo)
+      L.info hLogger $ L.JustText ("New user has been added, info:" <> (fromString .show $ cUserInfo))
     Help -> do
       hSendMes $ MessageSend cUserInfo (fromString . unpack $ hConfig & cHelpMes)
-      L.info hLogger $ L.JustText ("Help message was sent to the " <> showUi cUserInfo)
+      L.info hLogger $ L.JustText ("Help message was sent to the " <> (fromString .show $ cUserInfo))
     Repeat -> do
       hSendMes $ MessageSend cUserInfo $ CKeyboard (hConfig & cRepeatKeyboardMes) repeatKeyboard
-      L.info hLogger $ L.JustText ("Keyboard was sent to the " <> showUi cUserInfo)
+      L.info hLogger $ L.JustText ("Keyboard was sent to the " <> (fromString .show $ cUserInfo))
 
-processMessage :: (IsString gettable, Monad m) =>
-  Handle gettable   m -> MessageGet gettable  -> m ()
+processMessage :: (IsString gettable, Monad m, Show usInf) =>
+  Handle gettable usInf m -> MessageGet gettable usInf -> m ()
 processMessage Handle {..} MessageGet {..} = do
-  L.info hLogger $ L.JustText ("Processing message from the " <> showUi mgUserInfo)
+  L.info hLogger $ L.JustText ("Processing message from the " <> (fromString .show $ mgUserInfo))
   userRepeat <- maybe (return (hConfig & cBaseRepeat)) return =<< hGetUserRepeat mgUserInfo
   replicateM_ userRepeat (hSendMes $ MessageSend mgUserInfo (CGettable mgContent))
-  L.info hLogger $ L.JustText ("Message was sent " <> (pack . show $ userRepeat) <> " times to the " <> showUi mgUserInfo)
+  L.info hLogger $ L.JustText ("Message was sent " <> (fromString .show $ userRepeat) <> " times to the " <> (fromString .show $ mgUserInfo))
 
 repeatKeyboard :: Keyboard
 repeatKeyboard = Keyboard $ map (\i -> (pack . show $ i, pack . show $ i)) (take 5 ([1,2..] :: [Int]))
 {-# INLINE repeatKeyboard #-}
-
-showUi :: UserInfo -> Text
-showUi UserInfo {..} = "user_id: " <> (pack . show $ uiId) <> ", chat_id: " <> (pack . show $ uiChatId)
