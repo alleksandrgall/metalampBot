@@ -33,6 +33,9 @@ instance FromConfig LogLevel where
         "error"   -> Just Error
         _         -> Nothing)
 
+newtype GroupId = GroupId Int deriving (Show, Generic)
+instance FromConfig GroupId
+
 data Repeat = Repeat {
     repeatDefaultNumber :: Int,
     repeatKeyboardMes   :: Text,
@@ -67,7 +70,8 @@ data AppConfig = AppConfig
         appConfigStart     :: Start,
         appConfigRepeat    :: Repeat,
         appConfigHelp      :: Help,
-        appConfigLogger    :: Logger
+        appConfigLogger    :: Logger,
+        appConfigGroupId   :: GroupId
     } deriving (Generic, Show)
 
 instance FromConfig AppConfig
@@ -90,7 +94,8 @@ instance DefaultConfig AppConfig where
                 loggerLogLevel = Info,
                 loggerOutputFile = Nothing,
                 loggerToConsole  = True
-            }
+            },
+            appConfigGroupId = GroupId (-1)
         }
 
 fetchConfig :: IO AppConfig

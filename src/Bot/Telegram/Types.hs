@@ -74,7 +74,7 @@ instance ToJSON TelegramMessageSend where
         , "text"     .= t
         , "reply_markup" .= object
             ["inline_keyboard" .=
-                [map (\(name, dat) -> object [("text", String name), ("callback_data", String dat)]) kb]]
+                [map (\name -> object [("text", String name), ("callback_data", String name)]) kb]]
         ]
 
 

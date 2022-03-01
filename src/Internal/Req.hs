@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 module Internal.Req (makeRequest, parseResponse) where
 
 import           Control.Monad.Catch    (Exception (fromException), MonadCatch,
@@ -11,7 +12,7 @@ import           Data.String            (IsString (fromString))
 import           Data.Text              (Text, intercalate, pack)
 import           Exceptions.Request
 import qualified Handlers.Logger        as L
-import           Internal.Types         (Protocol (..), Token)
+import           Internal.Types         (Token)
 import           Network.HTTP.Client    (ManagerSettings)
 import           Network.HTTP.Req       (GET (GET), LbsResponse,
                                          NoReqBody (NoReqBody), POST (POST),
@@ -23,9 +24,7 @@ import           Network.HTTP.Req       (GET (GET), LbsResponse,
                                          responseStatusMessage, runReq, (/:),
                                          (=:))
 
-
-
-parseResponse :: (FromJSON response, MonadCatch m, Show response) => L.Handle m -> B.ByteString -> m response
+parseResponse :: (FromJSON response, MonadThrow m, Show response) => L.Handle m -> B.ByteString -> m response
 parseResponse hLogger respBody = case eitherDecode respBody of
     Right result -> do
         L.debug hLogger (L.JustText (pack . show $ result))
@@ -34,12 +33,11 @@ parseResponse hLogger respBody = case eitherDecode respBody of
         L.error hLogger $ L.WithBs ("Parsing failed due to mismatching type, error:\n\t" <> fromString e) respBody
         throwM $ RParseException . WrongType . fromString $ e
 
-makeRequest :: (MonadCatch m, ToJSON a, MonadIO m) =>
-    L.Handle m -> Maybe a -> Protocol -> Text -> [Text] -> [(Text, Text)] -> m B.ByteString
-makeRequest hLogger maybeBody p url methods params = do
-    resp <- handleWebException hLogger url methods $ sendRequestReq
+makeRequest :: (ToJSON a, MonadIO m) =>
+    L.Handle m -> Maybe a -> Text -> [Text] -> [(Text, Text)] -> m B.ByteString
+makeRequest hLogger maybeBody url methods params = do
+    resp <- sendRequestReq
         maybeBody
-        p
         url
         methods
         params
@@ -49,84 +47,35 @@ makeRequest hLogger maybeBody p url methods params = do
         "\n\tDescription: " <> (resp & pack . show . responseStatusMessage) <>
         "\n\tBody: ")
         (resp & responseBody)
-    if mempty == (resp & responseBody) then do
-        L.error hLogger $ L.JustText $
-            "Response was got but body is empty from " <> targetUrl <>
-            "\n\tCode: " <> (pack . show $ resp & responseStatusCode) <>
-            "\n\tDescription: " <> (resp & pack . show . responseStatusMessage)
-        throwM $ RBodyException EmptyReponseBody
-    else return (resp & responseBody)
+    return (resp & responseBody)
     where targetUrl = url <> "/" <> intercalate "/" methods <> "?" <> (intercalate "&" . map (\(k, v) -> k <> "=" <> v) $ params)
 
-
-
--- | Just rethrowing exceptions in the form of WebException for the bot logic to deal with
-handleWebException :: (MonadCatch m) => L.Handle m -> Text -> [Text] -> m a -> m a
-handleWebException hLogger url methods = handleFromException . handlePure
-    where
-        logException NoResponse = L.error hLogger (L.JustText $ "No response from " <> url)
-        logException (CodeMessageException c t) = L.error hLogger (L.JustText $ "Server answered with an error: " <> (pack . show $ c) <> ". Desctiption: " <> t)
-        logException (ConnectionException t) = L.error hLogger (L.JustText $ "Unnable to connect: " <> t)
-        logException (InvalidUrlException url msg) = L.error hLogger (L.JustText $ "Url is invalid: " <> url <> ", error: " <> msg)
-        logException (SomeWebException se) = L.error hLogger (L.JustText $ "Web exception was caught: " <> (pack . show $ se))
-
-        handlePure = handle $ \e -> do
-            logException e
-            throwM $ RWebException e
-
-        handleFromException = handle $ \e -> do
-            let maybeWebException = fromException e
-            case maybeWebException of
-                Just webE -> do
-                    logException webE
-                    throwM $ RWebException webE
-                -- In case of parse fromException failing throws SomeException
-                Nothing -> throwM e
 
 -- | Function to make requests using Network.HTTP.Req library
 --
 -- | Can throw Exceptions from Network.HTTP.Client
-sendRequestReq :: (MonadThrow m, MonadIO m, ToJSON b) =>
+sendRequestReq :: (MonadIO m, ToJSON b) =>
     Maybe b -> -- | possible request body
-    Protocol ->
     Text -> -- | base api url
     [Text] -> -- | method
     [(Text, Text)] -> -- | method params
     m LbsResponse
-sendRequestReq maybeBody prot url methods params =
-    if prot == Https then requestHttps else requestHttp
+sendRequestReq maybeBody url methods params =
+    maybe
+        (runReq defaultHttpConfig (req
+            GET
+            builtHttps
+            NoReqBody
+            lbsResponse
+            queryParams))
+        (\body -> runReq defaultHttpConfig (req
+            POST
+            builtHttps
+            (ReqBodyJson body)
+            lbsResponse
+            queryParams))
+        maybeBody
     where
-        -- | Don't know how to avoid code duplication since type sigs must be different, must consult the CHAT
-        requestHttp =
-         maybe
-            (runReq defaultHttpConfig (req
-                GET
-                builtHttp
-                NoReqBody
-                lbsResponse
-                queryParams))
-            (\body -> runReq defaultHttpConfig (req
-                POST
-                builtHttp
-                (ReqBodyJson body)
-                lbsResponse
-                queryParams))
-            maybeBody
-        requestHttps =
-         maybe
-            (runReq defaultHttpConfig (req
-                GET
-                builtHttps
-                NoReqBody
-                lbsResponse
-                queryParams))
-            (\body -> runReq defaultHttpConfig (req
-                POST
-                builtHttps
-                (ReqBodyJson body)
-                lbsResponse
-                queryParams))
-            maybeBody
         builtHttp = foldl (/:) (http url) methods
         builtHttps = foldl (/:) (https url) methods
         queryParams :: (QueryParam p, Monoid p) => p

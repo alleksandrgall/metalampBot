@@ -28,6 +28,7 @@ library
       Bot.Telegram
       Bot.Telegram.Implement
       Bot.Telegram.Types
+      Bot.VK
       Bot.VK.Implement
       Bot.VK.Types
       Config

@@ -135,12 +135,12 @@ processCommand = hspec $ do
             shouldHaveBeenSend = [Message targetUserInfo (B.CGettable . GText . unpack $ mockHandle & B.hConfig & B.cHelpMes)]
         in send == shouldHaveBeenSend
 
-    it "on repeat sends keyboard and repeat message (cRepeatKeyboardMes)" $ do
+    it "on repeat sends keyboard with repeat message as it's text (cRepeatKeyboardMes)" $ do
       property $ \targetUser ->
         let targetUserInfo = uncurry TestUserInfo targetUser
             (_, _, send) = run $ B.processCommand mockHandle (B.Command (uncurry TestUserInfo targetUser) B.Repeat)
             keyboardMessage = mockHandle & B.hConfig & B.cRepeatKeyboardMes
-            keyboardInfo    = [(pack . show $ x, pack . show $ x) | x <- [1 .. 5]]
+            keyboardInfo    = [pack . show $ x | x <- [1 .. 5]]
             shouldHaveBeenSend = [Message targetUserInfo (B.CKeyboard keyboardMessage (B.Keyboard keyboardInfo))]
         in send == shouldHaveBeenSend
 
