@@ -20,7 +20,6 @@ import qualified Data.HashMap.Lazy      as HM
 import           Data.IORef             (modifyIORef', newIORef, readIORef,
                                          writeIORef)
 import           Data.Int               (Int64)
-import           Data.List
 import           Data.String            (IsString (fromString))
 import           Data.Text              (Text, pack)
 import           GHC.Exts
@@ -28,8 +27,7 @@ import           GHC.Generics           (Generic)
 import qualified Handlers.Bot           as B
 import qualified Handlers.Logger        as L
 import           Internal.Req           (makeRequest, parseResponse)
-import           Internal.Types         (Protocol (Https))
-import           Internal.Utils
+import           Prelude                hiding (init)
 
 apiVersion = 5.131
 
@@ -60,57 +58,55 @@ withHandle Config {..} hL f = do
         h = B.Handle {
           hConfig             = c
         , hLogger             = hL
-        , hInit               = initTg cToken hL
-        , hGetUpdates         = getUpdatesTg cToken hL
-        , hSendMes            = sendMesTg cToken hL
-        , hAnswerCallback     = ansCbTg cToken hL
-        , hGetOffset          = getOffsetTg offset
-        , hSetOffset          = setOffsetTg offset
-        , hInsertUserRepeat   = insertUserRepeatTg userRepeat
-        , hGetUserRepeat      = getUserRepeatTg userRepeat
+        , hInit               = init cToken hL
+        , hGetUpdates         = getUpdates cToken hL
+        , hSendMes            = sendMes cToken hL
+        , hAnswerCallback     = ansCb cToken hL
+        , hGetOffset          = getOffset offset
+        , hSetOffset          = setOffset offset
+        , hInsertUserRepeat   = insertUserRepeat userRepeat
+        , hGetUserRepeat      = getUserRepeat userRepeat
     }
     f h
     where
-        getOffsetTg ref = liftIO $ readIORef ref
-        setOffsetTg ref offset = liftIO $ writeIORef ref offset
-        getUserRepeatTg ref ui = (liftIO . readIORef $ ref) <&> HM.lookup ui
-        insertUserRepeatTg ref ui r = liftIO $ modifyIORef' ref (HM.insert ui r)
+        getOffset ref = liftIO $ readIORef ref
+        setOffset ref offset = liftIO $ writeIORef ref offset
+        getUserRepeat ref ui = (liftIO . readIORef $ ref) <&> HM.lookup ui
+        insertUserRepeat ref ui r = liftIO $ modifyIORef' ref (HM.insert ui r)
 
-tgRequest :: (MonadCatch m, MonadIO m, ToJSON b) => String -> L.Handle m -> Maybe b -> Text -> [(Text, Text)] -> m BS.ByteString
-tgRequest token hL body method params = do
-    makeRequest hL body Https "api.telegram.org" ["bot" <> fromString token, method] params
-{-# INLINE tgRequest #-}
+request :: (MonadCatch m, MonadIO m, ToJSON b) => String -> L.Handle m -> Maybe b -> Text -> [(Text, Text)] -> m BS.ByteString
+request token hL body method = makeRequest hL body "api.telegram.org" ["bot" <> fromString token, method]
+{-# INLINE request #-}
 
-newtype TgCommands = TgCommands [(Text, Text)] deriving Generic
-instance ToJSON TgCommands where
-    toJSON (TgCommands ls) = object ["commands" .= Array (fromList (map (\(c, d) -> object ["command" .= c, "description" .= d]) ls))]
+newtype Commands = Commands [(Text, Text)] deriving Generic
+instance ToJSON Commands where
+    toJSON (Commands ls) = object ["commands" .= Array (fromList (map (\(c, d) -> object ["command" .= c, "description" .= d]) ls))]
 
-initTg :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> m ()
-initTg token hL = do
-    tgRequest token hL (Nothing :: Maybe String) "getMe" []
-    tgRequest token hL (Just $ TgCommands
+init :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> m ()
+init token hL = do
+    request token hL (Just $ Commands
         [("/repeat", "Use to change the repeat number."),
          ("/help"  , "Use to get help."),
          ("/start" , "Use to see a start message")])
          "setMyCommands" []
     return ()
 
-getUpdatesTg :: (MonadMask m, MonadIO m) => String -> L.Handle m -> Int64 -> m (Maybe Int64, [TelegramUpdate])
-getUpdatesTg token hL offset = do
-    TelegramResult idUpds <- parseResponse hL =<< tgRequest token hL (Nothing :: Maybe String) "getUpdates"
+getUpdates :: (MonadMask m, MonadIO m) => String -> L.Handle m -> Int64 -> m (Maybe Int64, [TelegramUpdate])
+getUpdates token hL offset = do
+    TelegramResult idUpds <- parseResponse hL =<< request token hL (Nothing :: Maybe String) "getUpdates"
      [("offset", pack . show $ offset),
-     ("timeout", pack . show $ 2)]
+     ("timeout", "2")]
     let (lastUId, upds) = foldr (\TelegramUpdateWithId{..} (curMax, res) ->
             if curMax < Just uId then (Just uId, uCont:res) else (curMax, uCont:res)) (Nothing, []) (idUpds :: [TelegramUpdateWithId])
     return ((+1) <$> lastUId, upds)
 
-sendMesTg :: (MonadMask m, MonadIO m) => String -> L.Handle m -> TelegramMessageSend -> m ()
-sendMesTg token hL tgMes = case tgMes & B.msContent of
-    B.CGettable (GSticker _) -> void $ tgRequest token hL (Just tgMes) "sendSticker" []
-    _   -> void $ tgRequest token hL (Just tgMes) "sendMessage" []
+sendMes :: (MonadMask m, MonadIO m) => String -> L.Handle m -> TelegramMessageSend -> m ()
+sendMes token hL tgMes = case tgMes & B.msContent of
+    B.CGettable (GSticker _) -> void $ request token hL (Just tgMes) "sendSticker" []
+    _   -> void $ request token hL (Just tgMes) "sendMessage" []
 
-ansCbTg :: (MonadMask m, MonadIO m) => String -> L.Handle m -> Text -> B.CallbackQuery TelegramUserInfo  -> m ()
-ansCbTg token hL cbMes B.CallbackQuery {..} = void $ tgRequest token hL (Nothing :: Maybe String) "answerCallbackQuery"
+ansCb :: (MonadMask m, MonadIO m) => String -> L.Handle m -> Text -> B.CallbackQuery TelegramUserInfo -> m ()
+ansCb token hL cbMes B.CallbackQuery {..} = void $ request token hL (Nothing :: Maybe String) "answerCallbackQuery"
     [("callback_query_id", pack cbId),
      ("text", cbMes)]
 

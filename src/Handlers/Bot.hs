@@ -76,7 +76,7 @@ data Update gettable usInf =
     UnknownUpdate
     deriving (Show, Eq)
 
-newtype Keyboard = Keyboard [(Text, Text)] deriving (Show, Eq)
+newtype Keyboard = Keyboard [Text] deriving (Show, Eq)
 
 data Config = Config {
     cBaseRepeat        :: Int
@@ -169,5 +169,5 @@ processMessage Handle {..} MessageGet {..} = do
   L.info hLogger $ L.JustText ("Message was sent " <> (fromString .show $ userRepeat) <> " times to the " <> (fromString .show $ mgUserInfo))
 
 repeatKeyboard :: Keyboard
-repeatKeyboard = Keyboard $ map (\i -> (pack . show $ i, pack . show $ i)) (take 5 ([1,2..] :: [Int]))
+repeatKeyboard = Keyboard $ map (pack . show) [1..5]
 {-# INLINE repeatKeyboard #-}
