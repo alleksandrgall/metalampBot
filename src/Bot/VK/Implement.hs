@@ -120,9 +120,7 @@ getUpdates keyR serverR hL offset = do
 
 sendMessage :: (MonadIO m) => String -> L.Handle m -> VKMessageSend -> m ()
 sendMessage token hL B.MessageSend {..} = void $ vkRequest token hL "messages.send" $
-  [buildUserInfo msUserInfo,
-  ("random_id", "0")] ++
-  messageInfo
+  [buildUserInfo msUserInfo, ("random_id", "0")] ++ messageInfo
   where
     buildUserInfo VKUserInfo {..} = if uiId == uiPeerId then ("user_id", fromString . show $ uiId)
       else ("chat_id", fromString . show $ (uiPeerId - 2000000000))
@@ -131,11 +129,9 @@ sendMessage token hL B.MessageSend {..} = void $ vkRequest token hL "messages.se
           B.CGettable (GSticker id_)  -> [("sticker_id", fromString . show $ id_)]
           B.CKeyboard txt kb          -> [("message", txt), ("keyboard", pack . CBS.unpack . encode $ kb)]
 
-
 ansCb :: (MonadIO m) => String -> L.Handle m -> Text -> B.CallbackQuery VKUserInfo -> m ()
-ansCb token hL repeatMessage cb = void $ vkRequest token hL "messages.sendMessageEventAnswer"
-  [("event_id", pack $ cb & B.cbId),
-   ("user_id" , pack .show $ cb & B.cbUserInfo & uiId),
-   ("peer_id" , pack . show $ cb & B.cbUserInfo & uiPeerId),
+ansCb token hL repeatMessage B.CallbackQuery {..} = void $ vkRequest token hL "messages.sendMessageEventAnswer"
+  [("event_id", pack cbId),
+   ("user_id" , pack .show $ cbUserInfo & uiId),
+   ("peer_id" , pack . show $ cbUserInfo & uiPeerId),
    ("event_data", pack . CBS.unpack . encode $ SnackBar repeatMessage)]
-
