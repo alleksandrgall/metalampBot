@@ -17,7 +17,6 @@ import           Network.HTTP.Client    (ManagerSettings)
 import           Network.HTTP.Req       (GET (GET), LbsResponse,
                                          NoReqBody (NoReqBody), POST (POST),
                                          QueryParam, ReqBodyJson (ReqBodyJson),
-                                         ReqBodyLbs (ReqBodyLbs),
                                          defaultHttpConfig, http, https,
                                          lbsResponse, req, responseBody,
                                          responseStatusCode,

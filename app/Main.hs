@@ -2,21 +2,33 @@
 module Main where
 import qualified Bot.Telegram         as TG
 import qualified Bot.VK               as VK
-import           Bot.VK.Types
-import           Config               (fetchConfig)
-import           Data.Aeson           (decodeFileStrict', encode)
+import           Config               (AppConfig (appConfigGroupId, appConfigMessenger, appConfigToken),
+                                       GroupId (GroupId), Messenger (Tele, VK),
+                                       fetchConfig)
+import           Control.Monad        (when)
 import qualified Data.ByteString.Lazy as B
-import           Handlers.Bot         (Keyboard (Keyboard), runBot)
+import           Data.Function        ((&))
+import           Handlers.Bot         (CallbackQuery, Keyboard (Keyboard),
+                                       runBot)
+import qualified Handlers.Logger      as L
 import qualified Logger.IO            as Lio
 
-kb = Keyboard ["1", "2", "3", "4", "5"]
 
 main :: IO ()
 main = do
 
-  writeFile "temp/VKKeyboardEncode.json" (show . encode $ Button "1")
-  -- appConfig <- fetchConfig
-  -- Lio.withHandle (Lio.parseConfig appConfig) $ \l ->
-  --   VK.withHandle (VK.parseConfig appConfig) l $ \b ->
-  --     runBot b
+  appConfig <- fetchConfig
+  Lio.withHandle (Lio.parseConfig appConfig) $ \l -> do
+    when ((appConfig & appConfigToken) == "") $ L.warning l $ L.JustText "Access token must be specified for correct behavior"
+    case appConfig & appConfigMessenger of
+      VK -> do
+        when ((appConfig & appConfigGroupId) == GroupId (-1)) $
+          L.warning l $ L.JustText "Group Id must be specified for VK"
+        L.info l $ L.JustText "Launching VK bot..."
+        VK.withHandle (VK.parseConfig appConfig) l $ \bot ->
+          runBot bot
+      Tele -> do
+        L.info l $ L.JustText "Launching Telegram bot..."
+        TG.withHandle (TG.parseConfig appConfig) l $ \bot ->
+            runBot bot
 

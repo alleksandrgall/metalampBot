@@ -1,23 +1,33 @@
-{-# LANGUAGE FlexibleInstances #-}
-module Bot.VK.Types where
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+module Bot.VK.Types
+    (SnackBar (SnackBar),
+    VKGettable (GSticker, GText),
+    VKMessageSend, VKUpdate,
+    VKUpdateResult (newTs, updates),
+    VKUserInfo (..))
+    where
 
-import           Control.Applicative ((<|>))
-import           Control.Monad       (guard)
-import           Data.Aeson
-import           Data.Aeson.Types
-import           Data.Foldable       (toList)
-import           Data.Function       ((&))
-import           Data.Hashable
-import           Data.Int            (Int64)
-import           Data.Maybe          (fromJust, isNothing)
-import           Data.String         (IsString)
-import           Data.Text           (Text, pack)
-import           GHC.Exts            (IsString (fromString))
-import           GHC.Generics        (Generic)
-import           Handlers.Bot
-import           Internal.Utils
+import           Control.Applicative        (Alternative ((<|>)))
+import           Control.Monad              (guard)
+import           Data.Aeson                 (FromJSON (parseJSON),
+                                             KeyValue ((.=)), ToJSON (toJSON),
+                                             Value (Object), encode, object,
+                                             withArray, withObject, (.:))
+import           Data.Aeson.Types           (Parser)
+import qualified Data.ByteString.Lazy.Char8 as CBL (unpack)
+import           Data.Hashable              (Hashable)
+import           Data.Int                   (Int64)
+import           Data.Text                  (Text)
+import           GHC.Exts                   (IsList (toList), IsString (..))
+import           GHC.Generics               (Generic)
+import           Handlers.Bot               (CallbackQuery (CallbackQuery),
+                                             Command, Keyboard (..),
+                                             MessageGet (..), MessageSend,
+                                             Update (..))
+import           Internal.Utils             (commandFromString)
 
--- | Type for VK result of a response
+-- | Type for VK result of getUpdate
 data VKUpdateResult = VKUpdateResult {
     newTs   :: Int64,
     updates :: [VKUpdate]
@@ -47,7 +57,7 @@ instance IsString VKGettable where
 
 instance FromJSON VKGettable where
     parseJSON (Object o) =
-        GSticker <$> (o .: "attachments" >>= withArray "attachments array" (mconcat . map findSticker . toList))
+        GSticker <$> (o .: "attachments" >>= withArray "attachments array" (mconcat . Prelude.map findSticker . GHC.Exts.toList))
         <|>
         GText <$> (o .: "text")
         where
@@ -56,6 +66,7 @@ instance FromJSON VKGettable where
             guard (t == "sticker")
             at .: "sticker" >>= (.: "sticker_id")
     parseJSON _ = mempty
+
 -- | Type for vk gettable message
 type VKMessageGet = MessageGet VKGettable VKUserInfo
 
@@ -64,36 +75,22 @@ instance FromJSON VKMessageGet where
     parseJSON _          = mempty
 
 -- | Instances for vk keyboard
-newtype Button = Button Text deriving Show
-instance ToJSON Button where
-    toJSON (Button txt) = object ["button" .= txt]
+newtype Button = Button {
+    button :: Text
+} deriving (Show, Generic, ToJSON)
+
 instance ToJSON Keyboard where
     toJSON (Keyboard btns) = object [
-        "one_time" .= True,
         "inline"   .= True,
-        "buttons"  .= [map (\b -> object
+        "buttons"  .= [Prelude.map (\b -> object
             ["action" .= object [
                 "type" .= ("callback" :: String),
                 "label" .= b,
-                "payload" .= (init . tail . show . encode $ Button b)]]) btns]
+                "payload" .= (CBL.unpack . encode $ Button b)]]) btns]
         ]
 
 -- | Type for vk sendable message
 type VKMessageSend = MessageSend VKGettable VKUserInfo
-instance ToJSON VKMessageSend where
-    toJSON (MessageSend VKUserInfo{..} (CKeyboard mes kb)) = object [
-        if uiId == uiPeerId then "user_id" .= uiId else "chat_id" .= (uiPeerId - 2000000000) ,
-        "keyboard" .= kb,
-        "message" .= mes
-        ]
-    toJSON (MessageSend VKUserInfo{..} (CGettable (GText mes))) = object [
-        if uiId == uiPeerId then "user_id" .= uiId else "chat_id" .= (uiPeerId - 2000000000) ,
-        "message" .= mes
-        ]
-    toJSON (MessageSend VKUserInfo{..} (CGettable (GSticker id))) = object [
-        if uiId == uiPeerId then "user_id" .= uiId else "chat_id" .= (uiPeerId - 2000000000) ,
-        "sticker_id" .= id
-        ]
 
 -- | Type for vk command
 instance FromJSON (Command VKUserInfo) where
@@ -104,33 +101,8 @@ instance FromJSON (Command VKUserInfo) where
 
 -- | Type for vk callback query
 instance FromJSON (CallbackQuery VKUserInfo) where
-    parseJSON (Object o) = CallbackQuery <$> parseJSON (Object o) <*> o .: "event_id" <*> o .: "payload"
+    parseJSON (Object o) = CallbackQuery <$> (VKUserInfo <$> o .: "user_id" <*> o .: "peer_id") <*> o .: "event_id" <*> o .: "payload"
     parseJSON _          = mempty
-
-data CbAnswer = CbAnswer {
-    eventId   :: String,
-    userId    :: Int64,
-    peerId    :: Int64,
-    eventData :: Text
-}
-
-cbAnswerFromCbQuery :: CallbackQuery VKUserInfo -> Text -> CbAnswer
-cbAnswerFromCbQuery CallbackQuery {..} repeatMessage = CbAnswer {
-    eventId = cbId,
-    userId = cbUserInfo & uiId,
-    peerId = cbUserInfo & uiPeerId,
-    eventData = repeatMessage
-}
-instance ToJSON CbAnswer where
-    toJSON CbAnswer {..} = object [
-            "event_id" .= eventId,
-            "user_id"  .= userId,
-            "peer_id"  .= peerId,
-            "event_data" .= (String . pack . show $ object [
-                "type" .= ("show_snackbar" :: String),
-                "text" .= eventData
-                ])
-        ]
 
 -- | Type for vk update query
 type VKUpdate = Update VKGettable VKUserInfo
@@ -144,3 +116,12 @@ instance FromJSON VKUpdate where
             (o .: "object" >>= \e -> UCallbackQuary <$> parseJSON (Object e)))
         <|> pure UnknownUpdate
     parseJSON _ = mempty
+
+-- | Type for vk snack_bar
+newtype SnackBar = SnackBar Text
+
+instance ToJSON SnackBar where
+    toJSON (SnackBar txt) = object [
+        "type" .= ("show_snackbar" :: String),
+        "text" .= txt
+        ]
