@@ -130,19 +130,20 @@ processUpdates h@Handle {..} newOffset uls = do
         UnknownUpdate     -> L.info hLogger $ L.JustText "Got an unknown update."
 
 processCallback :: (Monad m, Show usInf) => Handle gettable usInf m -> CallbackQuery usInf -> m ()
-processCallback Handle {..} cb = do
-  L.info hLogger $ L.JustText ("Processing callback from the " <> (fromString .show $ (cb & cbUserInfo)) <> "...")
-  let mNewRepeat = ((readMaybe $ cb & cbData) :: Maybe Int)
-  case mNewRepeat of
-    Nothing -> L.warning hLogger $ L.JustText ("Bad callback from the " <> (fromString . show $ (cb & cbUserInfo)))
-    Just newRepeat -> if newRepeat `notElem` [1..5] then
-      L.warning hLogger $ L.JustText ("Bad callback from the " <> (fromString .show $ (cb & cbUserInfo)))
-      else do
-        hInsertUserRepeat (cb & cbUserInfo) newRepeat
-        hAnswerCallback (hConfig & cRepeatMes) cb
-        L.info hLogger $ L.JustText
-          ("Repeat number of the " <> (fromString .show $ (cb & cbUserInfo)) <> " was adjusted and answer was send to the user\n\t" <>
-           "New number: " <> (fromString .show $ newRepeat))
+processCallback Handle {..} cb@CallbackQuery {..} = do
+  L.info hLogger $ L.JustText ("Processing callback from the " <> (fromString .show $ cbUserInfo) <> "...")
+  let maybeNewRepeat = readMaybe cbData
+      testNewRepeat = (`elem` [1..5]) <$> maybeNewRepeat
+  if isNothing testNewRepeat || testNewRepeat == Just False then
+    L.warning hLogger $ L.JustText
+      ("Bad callback data from the " <> (fromString .show $ cbUserInfo) <> ", data: " <> fromString cbData)
+  else do
+    let newRepeat = fromJust maybeNewRepeat
+    hInsertUserRepeat cbUserInfo newRepeat
+    hAnswerCallback (hConfig & cRepeatMes) cb
+    L.info hLogger $ L.JustText
+      ("Repeat number of the " <> (fromString .show $ cbUserInfo) <> " was adjusted and answer was send to the user\n\t" <>
+        "New number: " <> (fromString . show $ newRepeat))
 
 processCommand :: (IsString gettable, Monad m, Show usInf) =>
   Handle gettable usInf m -> Command usInf -> m ()
@@ -169,5 +170,5 @@ processMessage Handle {..} MessageGet {..} = do
   L.info hLogger $ L.JustText ("Message was sent " <> (fromString .show $ userRepeat) <> " times to the " <> (fromString .show $ mgUserInfo))
 
 repeatKeyboard :: Keyboard
-repeatKeyboard = Keyboard $ map (pack . show) [1..5]
+repeatKeyboard = Keyboard ["1", "2", "3", "4", "5"]
 {-# INLINE repeatKeyboard #-}

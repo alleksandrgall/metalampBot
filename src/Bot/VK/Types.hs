@@ -13,7 +13,8 @@ import           Control.Monad              (guard)
 import           Data.Aeson                 (FromJSON (parseJSON),
                                              KeyValue ((.=)), ToJSON (toJSON),
                                              Value (Object), encode, object,
-                                             withArray, withObject, (.:))
+                                             withArray, withObject,
+                                             withScientific, (.:))
 import           Data.Aeson.Types           (Parser)
 import qualified Data.ByteString.Lazy.Char8 as CBL (unpack)
 import           Data.Hashable              (Hashable)
@@ -35,6 +36,7 @@ data VKUpdateResult = VKUpdateResult {
 instance FromJSON VKUpdateResult where
     parseJSON (Object o) = VKUpdateResult <$> (read <$> o .: "ts") <*> o .: "updates"
     parseJSON _          = mempty
+
 -- | Type for VK user info and instances
 data VKUserInfo = VKUserInfo {
       uiId     :: Int64
@@ -45,7 +47,7 @@ instance Show VKUserInfo where
     show VKUserInfo {..} = "user_id: " <> show uiId <> ", peer_id: " <> show uiPeerId
 
 instance FromJSON VKUserInfo where
-    parseJSON (Object o) = VKUserInfo <$> (o .: "from_id") <*> (o .: "peer_id")
+    parseJSON (Object o) = VKUserInfo <$> (o .: "from_id" <|> o .: "user_id") <*> (o .: "peer_id")
     parseJSON _          = mempty
 
 
@@ -75,10 +77,6 @@ instance FromJSON VKMessageGet where
     parseJSON _          = mempty
 
 -- | Instances for vk keyboard
-newtype Button = Button {
-    button :: Text
-} deriving (Show, Generic, ToJSON)
-
 instance ToJSON Keyboard where
     toJSON (Keyboard btns) = object [
         "inline"   .= True,
@@ -86,7 +84,7 @@ instance ToJSON Keyboard where
             ["action" .= object [
                 "type" .= ("callback" :: String),
                 "label" .= b,
-                "payload" .= (CBL.unpack . encode $ Button b)]]) btns]
+                "payload" .= b]]) btns]
         ]
 
 -- | Type for vk sendable message
@@ -99,12 +97,19 @@ instance FromJSON (Command VKUserInfo) where
             GText txt -> maybe mempty pure (commandFromString txt mgUserInfo)
             _         -> mempty
 
--- | Type for vk callback query
+
+-- | Due to incorrect api behavior payload in callback returns as an int, therefore it should be converted to string first
+newtype Payload = Payload { unpayload :: String} deriving (Show)
+
+-- | Instance for vk callback query
+instance FromJSON Payload where
+    parseJSON (Object o) = Payload <$> (o .: "payload" >>= withScientific "Int payload" (return . show . round))
+    parseJSON _ = mempty
 instance FromJSON (CallbackQuery VKUserInfo) where
-    parseJSON (Object o) = CallbackQuery <$> (VKUserInfo <$> o .: "user_id" <*> o .: "peer_id") <*> o .: "event_id" <*> o .: "payload"
+    parseJSON (Object o) = CallbackQuery <$> parseJSON (Object o) <*> o .: "event_id" <*> (unpayload <$> parseJSON (Object o))
     parseJSON _          = mempty
 
--- | Type for vk update query
+-- | Type for vk update
 type VKUpdate = Update VKGettable VKUserInfo
 instance FromJSON VKUpdate where
     parseJSON (Object o) = (o .: "type" >>= \t -> guard ((t :: String) == "message_new") >>
@@ -117,7 +122,7 @@ instance FromJSON VKUpdate where
         <|> pure UnknownUpdate
     parseJSON _ = mempty
 
--- | Type for vk snack_bar
+-- | Type for vk event show_snackbar
 newtype SnackBar = SnackBar Text
 
 instance ToJSON SnackBar where
