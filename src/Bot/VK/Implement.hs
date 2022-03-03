@@ -1,23 +1,32 @@
+
 module Bot.VK.Implement where
-import           Bot.VK.Types
-import           Config
-import           Control.Monad                (void)
-import           Control.Monad.Catch          (MonadCatch, MonadMask,
-                                               MonadThrow)
+import           Bot.VK.Types                 (SnackBar (SnackBar),
+                                               VKGettable (GSticker, GText),
+                                               VKMessageSend, VKUpdate,
+                                               VKUpdateResult (newTs, updates),
+                                               VKUserInfo (..))
+import           Config                       (AppConfig (..),
+                                               GroupId (GroupId),
+                                               Help (helpMessage),
+                                               Repeat (repeatDefaultNumber, repeatKeyboardMes, repeatMessage),
+                                               Start (startMessage))
+
+import           Control.Monad.Catch          (MonadThrow)
 import           Control.Monad.IO.Class       (MonadIO (liftIO))
 import           Data.Aeson                   (FromJSON (parseJSON), ToJSON,
                                                Value (Object), defaultOptions,
                                                encode, genericParseJSON, (.:))
-import qualified Data.ByteString.Lazy         as BS
+import qualified Data.ByteString.Lazy         as BS (ByteString)
+import qualified Data.ByteString.Lazy.Char8   as CBS (unpack)
 import           Data.Coerce                  (coerce)
 import           Data.Function                ((&))
-import           Data.Functor
-import qualified Data.HashMap.Internal.Strict as HM
+import           Data.Functor                 (void, (<&>))
+import qualified Data.HashMap.Internal.Strict as HM (HashMap, insert, lookup)
 import           Data.IORef                   (IORef, modifyIORef', newIORef,
                                                readIORef, writeIORef)
 import           Data.Int                     (Int64)
 import           Data.String                  (IsString (fromString))
-import           Data.Text                    (Text)
+import           Data.Text                    (Text, pack)
 import           GHC.Generics                 (Generic)
 import qualified Handlers.Bot                 as B
 import qualified Handlers.Logger              as L
@@ -73,9 +82,9 @@ withHandle Config {..} hL f = do
       insertUserRepeat ref ui r = liftIO $ modifyIORef' ref (HM.insert ui r)
 
 
-vkRequest :: (MonadIO m, ToJSON b) => String -> L.Handle m -> Maybe b -> Text -> [(Text, Text)] -> m BS.ByteString
-vkRequest token hL body method params =
-  makeRequest hL body "api.vk.com" ["method", method] (("v", "5.131"):("access_token", fromString token):params)
+vkRequest :: (MonadIO m) => String -> L.Handle m  -> Text -> [(Text, Text)] -> m BS.ByteString
+vkRequest token hL method params =
+  makeRequest hL (Nothing :: Maybe String) "api.vk.com" ["method", method] (("v", "5.131"):("access_token", fromString token):params)
 
 data GetLongPollAnswer = GetLongPollAnswer {
   key    :: String,
@@ -88,7 +97,7 @@ instance FromJSON GetLongPollAnswer where
 
 init :: (MonadThrow m, MonadIO m) => IORef Int64 -> IORef String -> IORef String -> String -> Int -> L.Handle m -> m ()
 init offsetR keyR serverR token groupId hL = do
-  res <- vkRequest token hL (Nothing :: Maybe String) "groups.getLongPollServer" [("group_id", fromString . show $ groupId)]
+  res <- vkRequest token hL "groups.getLongPollServer" [("group_id", fromString . show $ groupId)]
   initInfo <- parseResponse hL res
   liftIO $ writeIORef offsetR (read $ ts initInfo)
   liftIO $ writeIORef serverR (getServerPath . server $ initInfo)
@@ -104,23 +113,29 @@ getUpdates keyR serverR hL offset = do
       ("act", "a_check"),
       ("key", fromString key),
       ("ts", fromString . show $ offset),
-      ("wait", "2")
+      ("wait", "20")
     ]
   if (updRes & newTs) == offset then return (Nothing, updRes & updates)
     else return (Just (updRes & newTs), updRes & updates)
 
 sendMessage :: (MonadIO m) => String -> L.Handle m -> VKMessageSend -> m ()
-sendMessage token hL B.MessageSend {..} = void $ vkRequest token hL (Nothing :: Maybe String) "messages.send" (
-  [if (msUserInfo & uiId) == (msUserInfo & uiPeerId) then ("user_id", fromString . show $ msUserInfo & uiId)
-    else ("chat_id", fromString . show $ (msUserInfo & uiPeerId) - 2000000000),
+sendMessage token hL B.MessageSend {..} = void $ vkRequest token hL "messages.send" $
+  [buildUserInfo msUserInfo,
   ("random_id", "0")] ++
-  messageInfo)
-  where messageInfo = case msContent of
-          B.CGettable (GText txt) -> [("message", fromString txt)]
-          B.CGettable (GSticker id_) -> [("sticker_id", fromString . show $ id_)]
-          B.CKeyboard txt kb -> [("message", txt), ("keyboard", fromString . show . encode $ kb)]
+  messageInfo
+  where
+    buildUserInfo VKUserInfo {..} = if uiId == uiPeerId then ("user_id", fromString . show $ uiId)
+      else ("chat_id", fromString . show $ (uiPeerId - 2000000000))
+    messageInfo = case msContent of
+          B.CGettable (GText txt)     -> [("message", fromString txt)]
+          B.CGettable (GSticker id_)  -> [("sticker_id", fromString . show $ id_)]
+          B.CKeyboard txt kb          -> [("message", txt), ("keyboard", pack . CBS.unpack . encode $ kb)]
 
 
 ansCb :: (MonadIO m) => String -> L.Handle m -> Text -> B.CallbackQuery VKUserInfo -> m ()
-ansCb token hL repeatMessage cb = void $ vkRequest token hL (Just (cbAnswerFromCbQuery cb repeatMessage)) "messages.sendMessageEventAnswer" []
+ansCb token hL repeatMessage cb = void $ vkRequest token hL "messages.sendMessageEventAnswer"
+  [("event_id", pack $ cb & B.cbId),
+   ("user_id" , pack .show $ cb & B.cbUserInfo & uiId),
+   ("peer_id" , pack . show $ cb & B.cbUserInfo & uiPeerId),
+   ("event_data", pack . CBS.unpack . encode $ SnackBar repeatMessage)]
 

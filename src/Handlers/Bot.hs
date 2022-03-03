@@ -127,7 +127,7 @@ processUpdates h@Handle {..} newOffset uls = do
         UCallbackQuary cb -> processCallback h cb
         UCommand c        -> processCommand h c
         UMessage m        -> processMessage h m
-        UnknownUpdate     -> return ()
+        UnknownUpdate     -> L.info hLogger $ L.JustText "Got an unknown update."
 
 processCallback :: (Monad m, Show usInf) => Handle gettable usInf m -> CallbackQuery usInf -> m ()
 processCallback Handle {..} cb = do

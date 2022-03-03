@@ -17,7 +17,7 @@ import           GHC.Generics                   (Generic)
 import           Handlers.Logger                (LogLevel (..))
 import           Internal.Types                 (Token)
 
-data Messenger = Tele | VK deriving (Show)
+data Messenger = Tele | VK deriving (Show, Eq)
 instance FromConfig Messenger where
     fromConfig = fetchFromConfigWith (\s -> case toLower s of
         "vk"       -> Just VK
@@ -33,7 +33,7 @@ instance FromConfig LogLevel where
         "error"   -> Just Error
         _         -> Nothing)
 
-newtype GroupId = GroupId Int deriving (Show, Generic)
+newtype GroupId = GroupId Int deriving (Show, Generic, Eq)
 instance FromConfig GroupId
 
 data Repeat = Repeat {
@@ -79,7 +79,7 @@ instance FromConfig AppConfig
 instance DefaultConfig AppConfig where
     configDef = AppConfig
         {
-            appConfigToken = "This is a token placeholder" ,
+            appConfigToken = "" ,
             appConfigMessenger = Tele,
             appConfigStart = Start {
                 startMessage = "This is a start message"
