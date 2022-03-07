@@ -16,7 +16,6 @@ module Handlers.Bot
   ,CommandType(..)
   ,Update(..)
   ,CallbackQuery(..)
-  ,Keyboard(..)
   ) where
 
 import           Control.Monad       (foldM, forever, replicateM_, unless, when)
@@ -37,7 +36,7 @@ data MessageGet gettable usInf = MessageGet {
   , mgContent  :: gettable
 } deriving (Show, Eq)
 
-data SendContent gettable = CGettable gettable | CKeyboard Text Keyboard
+data SendContent gettable = CGettable gettable | CKeyboard Text
   deriving (Show, Eq)
 
 instance (IsString gettable) => IsString (SendContent gettable) where
@@ -75,8 +74,6 @@ data Update gettable usInf =
     UCommand (Command usInf) |
     UnknownUpdate
     deriving (Show, Eq)
-
-newtype Keyboard = Keyboard [Text] deriving (Show, Eq)
 
 data Config = Config {
     cBaseRepeat        :: Int
@@ -158,7 +155,7 @@ processCommand Handle {..} Command {..} = do
       hSendMes $ MessageSend cUserInfo (fromString . unpack $ hConfig & cHelpMes)
       L.info hLogger $ L.JustText ("Help message was sent to the " <> (fromString .show $ cUserInfo))
     Repeat -> do
-      hSendMes $ MessageSend cUserInfo $ CKeyboard (hConfig & cRepeatKeyboardMes) repeatKeyboard
+      hSendMes $ MessageSend cUserInfo $ CKeyboard (hConfig & cRepeatKeyboardMes)
       L.info hLogger $ L.JustText ("Keyboard was sent to the " <> (fromString .show $ cUserInfo))
 
 processMessage :: (IsString gettable, Monad m, Show usInf) =>
@@ -168,7 +165,3 @@ processMessage Handle {..} MessageGet {..} = do
   userRepeat <- maybe (return (hConfig & cBaseRepeat)) return =<< hGetUserRepeat mgUserInfo
   replicateM_ userRepeat (hSendMes $ MessageSend mgUserInfo (CGettable mgContent))
   L.info hLogger $ L.JustText ("Message was sent " <> (fromString .show $ userRepeat) <> " times to the " <> (fromString .show $ mgUserInfo))
-
-repeatKeyboard :: Keyboard
-repeatKeyboard = Keyboard ["1", "2", "3", "4", "5"]
-{-# INLINE repeatKeyboard #-}
