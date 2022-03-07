@@ -25,11 +25,12 @@ import           Data.Int            (Int64)
 import           Data.List           (stripPrefix)
 import           Data.Maybe          (fromJust)
 import           Data.String         (IsString (..))
+import           Data.Text           (Text)
 import           GHC.Generics        (Generic)
 import           Handlers.Bot        (CallbackQuery (..), Command (..),
-                                      CommandType (..), Keyboard (..),
-                                      MessageGet (..), MessageSend (..),
-                                      SendContent (..), Update (..))
+                                      CommandType (..), MessageGet (..),
+                                      MessageSend (..), SendContent (..),
+                                      Update (..))
 import           Internal.Utils      (commandFromString)
 
 -- | Type for telegram user info and instances
@@ -57,6 +58,16 @@ data TelegramGettable = GText String (Maybe [Entity]) | GSticker String
 instance IsString TelegramGettable where
     fromString s = GText s Nothing
 
+-- | Type and instance for telegram keyboard
+data TelegramKeyboard = TelegramKeyboard
+keyboardLayout :: [Text]
+keyboardLayout = ["1", "2", "3", "4", "5"]
+
+instance ToJSON TelegramKeyboard where
+    toJSON _ = object
+        ["inline_keyboard" .=
+            [map (\name -> object [("text", String name), ("callback_data", String name)]) keyboardLayout]]
+
 -- | Types for telegram messages and Aeson instances
 type TelegramMessageSend = MessageSend TelegramGettable TelegramUserInfo
 instance ToJSON TelegramMessageSend where
@@ -69,12 +80,10 @@ instance ToJSON TelegramMessageSend where
            "chat_id" .= uiChatId
          , "sticker" .= sId
         ]
-    toJSON (MessageSend TelegramUserInfo {..} (CKeyboard t (Keyboard kb))) = object [
+    toJSON (MessageSend TelegramUserInfo {..} (CKeyboard t )) = object [
           "chat_id"  .= uiChatId
         , "text"     .= t
-        , "reply_markup" .= object
-            ["inline_keyboard" .=
-                [map (\name -> object [("text", String name), ("callback_data", String name)]) kb]]
+        , "reply_markup" .= TelegramKeyboard
         ]
 
 

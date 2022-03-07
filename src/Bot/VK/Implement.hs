@@ -2,6 +2,7 @@
 module Bot.VK.Implement where
 import           Bot.VK.Types                 (SnackBar (SnackBar),
                                                VKGettable (GSticker, GText),
+                                               VKKeyboard (VKKeyboard),
                                                VKMessageSend, VKUpdate,
                                                VKUpdateResult (newTs, updates),
                                                VKUserInfo (..))
@@ -127,7 +128,7 @@ sendMessage token hL B.MessageSend {..} = void $ vkRequest token hL "messages.se
     messageInfo = case msContent of
           B.CGettable (GText txt)     -> [("message", fromString txt)]
           B.CGettable (GSticker id_)  -> [("sticker_id", fromString . show $ id_)]
-          B.CKeyboard txt kb          -> [("message", txt), ("keyboard", pack . CBS.unpack . encode $ kb)]
+          B.CKeyboard txt             -> [("message", txt), ("keyboard", pack . CBS.unpack . encode $ VKKeyboard)]
 
 ansCb :: (MonadIO m) => String -> L.Handle m -> Text -> B.CallbackQuery VKUserInfo -> m ()
 ansCb token hL repeatMessage B.CallbackQuery {..} = void $ vkRequest token hL "messages.sendMessageEventAnswer"

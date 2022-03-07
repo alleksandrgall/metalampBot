@@ -4,7 +4,7 @@ module Bot.VK.Types
     VKGettable (GSticker, GText),
     VKMessageSend, VKUpdate,
     VKUpdateResult (newTs, updates),
-    VKUserInfo (..))
+    VKUserInfo (..), VKKeyboard(..))
     where
 
 import           Control.Applicative (Alternative ((<|>)))
@@ -20,8 +20,7 @@ import           Data.Text           (Text)
 import           GHC.Exts            (IsList (toList), IsString (..))
 import           GHC.Generics        (Generic)
 import           Handlers.Bot        (CallbackQuery (CallbackQuery), Command,
-                                      Keyboard (..), MessageGet (..),
-                                      MessageSend, Update (..))
+                                      MessageGet (..), MessageSend, Update (..))
 import           Internal.Utils      (commandFromString)
 
 -- | Type for VK result of getUpdate
@@ -73,14 +72,18 @@ instance FromJSON VKMessageGet where
     parseJSON _          = mempty
 
 -- | Type and instance for vk keyboard
-instance ToJSON Keyboard where
-    toJSON (Keyboard btns) = object [
+data VKKeyboard = VKKeyboard
+
+keyboardLayout :: [String]
+keyboardLayout = ["1", "2", "3", "4", "5"]
+instance ToJSON VKKeyboard where
+    toJSON _ = object [
         "inline"   .= True,
-        "buttons"  .= [Prelude.map (\b -> object
+        "buttons"  .= [map (\b -> object
             ["action" .= object [
                 "type" .= ("callback" :: String),
                 "label" .= b,
-                "payload" .= b]]) btns]
+                "payload" .= b]]) keyboardLayout]
         ]
 
 -- | Type for vk sendable message
