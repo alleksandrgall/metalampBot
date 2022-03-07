@@ -1,5 +1,4 @@
-{-# LANGUAGE FlexibleInstances          #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
 module Bot.VK.Types
     (SnackBar (SnackBar),
     VKGettable (GSticker, GText),
@@ -8,25 +7,22 @@ module Bot.VK.Types
     VKUserInfo (..))
     where
 
-import           Control.Applicative        (Alternative ((<|>)))
-import           Control.Monad              (guard)
-import           Data.Aeson                 (FromJSON (parseJSON),
-                                             KeyValue ((.=)), ToJSON (toJSON),
-                                             Value (Object), encode, object,
-                                             withArray, withObject,
-                                             withScientific, (.:))
-import           Data.Aeson.Types           (Parser)
-import qualified Data.ByteString.Lazy.Char8 as CBL (unpack)
-import           Data.Hashable              (Hashable)
-import           Data.Int                   (Int64)
-import           Data.Text                  (Text)
-import           GHC.Exts                   (IsList (toList), IsString (..))
-import           GHC.Generics               (Generic)
-import           Handlers.Bot               (CallbackQuery (CallbackQuery),
-                                             Command, Keyboard (..),
-                                             MessageGet (..), MessageSend,
-                                             Update (..))
-import           Internal.Utils             (commandFromString)
+import           Control.Applicative (Alternative ((<|>)))
+import           Control.Monad       (guard)
+import           Data.Aeson          (FromJSON (parseJSON), KeyValue ((.=)),
+                                      ToJSON (toJSON), Value (Object), object,
+                                      withArray, withObject, withScientific,
+                                      (.:))
+import           Data.Aeson.Types    (Parser)
+import           Data.Hashable       (Hashable)
+import           Data.Int            (Int64)
+import           Data.Text           (Text)
+import           GHC.Exts            (IsList (toList), IsString (..))
+import           GHC.Generics        (Generic)
+import           Handlers.Bot        (CallbackQuery (CallbackQuery), Command,
+                                      Keyboard (..), MessageGet (..),
+                                      MessageSend, Update (..))
+import           Internal.Utils      (commandFromString)
 
 -- | Type for VK result of getUpdate
 data VKUpdateResult = VKUpdateResult {
@@ -76,7 +72,7 @@ instance FromJSON VKMessageGet where
     parseJSON (Object o) = MessageGet <$> parseJSON (Object o) <*> parseJSON (Object o)
     parseJSON _          = mempty
 
--- | Instances for vk keyboard
+-- | Type and instance for vk keyboard
 instance ToJSON Keyboard where
     toJSON (Keyboard btns) = object [
         "inline"   .= True,
