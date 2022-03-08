@@ -1,53 +1,71 @@
 {-# LANGUAGE RankNTypes #-}
 module Internal.Req (makeRequest, parseResponse) where
 
-import           Control.Monad.Catch    (Exception (fromException), MonadCatch,
-                                         MonadThrow, handle, throwM)
-import           Control.Monad.IO.Class (MonadIO)
-import           Data.Aeson             (FromJSON (parseJSON), ToJSON,
-                                         Value (Object), eitherDecode, (.:))
-import qualified Data.ByteString.Lazy   as B
-import           Data.Function          ((&))
-import           Data.String            (IsString (fromString))
-import           Data.Text              (Text, intercalate, pack)
+import           Control.Concurrent         (threadDelay)
+import           Control.Monad.Catch        (Exception (fromException, toException),
+                                             MonadCatch, MonadThrow, handle,
+                                             throwM)
+import           Control.Monad.IO.Class     (MonadIO (liftIO))
+import           Data.Aeson                 (FromJSON (parseJSON), ToJSON,
+                                             Value (Object), eitherDecode, (.:))
+import qualified Data.ByteString.Lazy       as B
+import qualified Data.ByteString.Lazy.Char8 as BC
+import           Data.Function              ((&))
+import           Data.String                (IsString (fromString))
+import           Data.Text                  (Text, intercalate, pack, unpack)
 import           Exceptions.Request
-import qualified Handlers.Logger        as L
-import           Internal.Types         (Token)
-import           Network.HTTP.Client    (ManagerSettings)
-import           Network.HTTP.Req       (GET (GET), LbsResponse,
-                                         NoReqBody (NoReqBody), POST (POST),
-                                         QueryParam, ReqBodyJson (ReqBodyJson),
-                                         defaultHttpConfig, http, https,
-                                         lbsResponse, req, responseBody,
-                                         responseStatusCode,
-                                         responseStatusMessage, runReq, (/:),
-                                         (=:))
+import qualified Handlers.Logger            as L
+import           Internal.Types             (Token)
+import           Network.HTTP.Client        (ManagerSettings)
+import           Network.HTTP.Req           (GET (GET), LbsResponse,
+                                             NoReqBody (NoReqBody), POST (POST),
+                                             QueryParam,
+                                             ReqBodyJson (ReqBodyJson),
+                                             defaultHttpConfig, http, https,
+                                             lbsResponse, req, responseBody,
+                                             responseStatusCode,
+                                             responseStatusMessage, runReq,
+                                             (/:), (=:))
+import           System.Exit                (exitFailure)
 
 parseResponse :: (FromJSON response, MonadThrow m, Show response) => L.Handle m -> B.ByteString -> m response
 parseResponse hLogger respBody = case eitherDecode respBody of
     Right result -> do
-        L.debug hLogger (L.JustText (pack . show $ result))
+        L.debug hLogger (show result)
         return result
     Left e     -> do
-        L.error hLogger $ L.WithBs ("Parsing failed due to mismatching type, error:\n\t" <> fromString e) respBody
+        L.error hLogger $ ("Parsing failed due to mismatching type, error:\n\t" <> fromString e <> "\n") <> BC.unpack respBody
         throwM $ RParseException . WrongType . fromString $ e
 
-makeRequest :: (ToJSON a, MonadIO m) =>
+makeRequest :: (ToJSON a, MonadIO m, MonadCatch m) =>
     L.Handle m -> Maybe a -> Text -> [Text] -> [(Text, Text)] -> m B.ByteString
 makeRequest hLogger maybeBody url methods params = do
-    resp <- sendRequestReq
-        maybeBody
-        url
-        methods
-        params
-    L.debug hLogger $ L.WithBs
-        ("Got response from" <> targetUrl <>
-        "\n\tCode: " <> (pack . show $ resp & responseStatusCode) <>
-        "\n\tDescription: " <> (resp & pack . show . responseStatusMessage) <>
-        "\n\tBody: ")
-        (resp & responseBody)
+    resp <- handleWeb hLogger targetUrl $ sendRequestReq maybeBody url methods params
+    L.debug hLogger $
+        ("Got response from " <> unpack targetUrl <>
+        "\n\tCode: " <> show (resp & responseStatusCode) <>
+        "\n\tDescription: " <> (resp & show . responseStatusMessage) <>
+        "\n\tBody: ") <> BC.unpack (resp & responseBody)
     return (resp & responseBody)
     where targetUrl = url <> "/" <> intercalate "/" methods <> "?" <> (intercalate "&" . map (\(k, v) -> k <> "=" <> v) $ params)
+
+handleWeb :: (MonadIO m, MonadCatch m) => L.Handle m -> Text -> m a -> m a
+handleWeb hL targetUrl m = handle (\e -> case fromException e of
+    Just (CodeMessageException code mes) -> do
+        if code == 429 then do
+            L.error hL "To many requests, 25 seconds delay"
+            liftIO $ threadDelay 25000
+            m
+        else throwM . toException $ e
+    Just (ConnectionException t) -> do
+        L.error hL $ "Connection failure: " <> unpack t <> "\n 25 seconds delay"
+        liftIO $ threadDelay 25000
+        m
+    Just (InvalidUrlException url mes) -> do
+        L.error hL $ "Invalid url: " <> unpack url <> "\n message: " <> unpack mes
+        liftIO $ exitFailure
+    Nothing -> throwM e) m
+
 
 
 -- | Function to make requests using Network.HTTP.Req library

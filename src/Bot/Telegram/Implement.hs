@@ -109,4 +109,3 @@ ansCb :: (MonadMask m, MonadIO m) => String -> L.Handle m -> Text -> B.CallbackQ
 ansCb token hL cbMes B.CallbackQuery {..} = void $ request token hL (Nothing :: Maybe String) "answerCallbackQuery"
     [("callback_query_id", pack cbId),
      ("text", cbMes)]
-

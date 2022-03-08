@@ -121,27 +121,27 @@ processCommand = hspec $ do
   describe "Handlers.Bot.processCommand" $ do
     let run m = runRWS m [] (0, mempty)
 
-    it "on start sends start message (cStartMes)" $ do
+    context "on start" $ it "on start sends start message (cStartMes)" $ do
       property $ \targetUser ->
         let targetUserInfo = uncurry TestUserInfo targetUser
             (_, _, send) = run $ B.processCommand mockHandle (B.Command (uncurry TestUserInfo targetUser) B.Start)
             shouldHaveBeenSend = [Message targetUserInfo (B.CGettable . GText . unpack $ mockHandle & B.hConfig & B.cStartMes)]
         in send == shouldHaveBeenSend
 
-    it "on help sends help message (cHelpMes)" $ do
+    context "on help" $ it "sends help message (cHelpMes)" $ do
       property $ \targetUser ->
         let targetUserInfo = uncurry TestUserInfo targetUser
             (_, _, send) = run $ B.processCommand mockHandle (B.Command (uncurry TestUserInfo targetUser) B.Help)
             shouldHaveBeenSend = [Message targetUserInfo (B.CGettable . GText . unpack $ mockHandle & B.hConfig & B.cHelpMes)]
         in send == shouldHaveBeenSend
 
-    it "on repeat sends keyboard with repeat message as it's text (cRepeatKeyboardMes)" $ do
+    context "on repeat" $ it "sends keyboard with repeat message as it's text (cRepeatKeyboardMes)" $ do
       property $ \targetUser ->
         let targetUserInfo = uncurry TestUserInfo targetUser
             (_, _, send) = run $ B.processCommand mockHandle (B.Command (uncurry TestUserInfo targetUser) B.Repeat)
             keyboardMessage = mockHandle & B.hConfig & B.cRepeatKeyboardMes
             keyboardInfo    = [pack . show $ x | x <- [1 .. 5]]
-            shouldHaveBeenSend = [Message targetUserInfo (B.CKeyboard keyboardMessage (B.Keyboard keyboardInfo))]
+            shouldHaveBeenSend = [Message targetUserInfo (B.CKeyboard keyboardMessage)]
         in send == shouldHaveBeenSend
 
 processMessage :: IO ()

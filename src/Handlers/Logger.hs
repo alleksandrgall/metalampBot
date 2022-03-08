@@ -2,7 +2,6 @@ module Handlers.Logger
   ( LogLevel(..)
   , Handle(..)
   , Config(..)
-  , MessageType(..)
   , log
   , debug
   , info
@@ -11,18 +10,17 @@ module Handlers.Logger
 
 import           Data.ByteString.Lazy.Char8 (ByteString)
 import           Data.Function              ((&))
-import           Data.Text                  (Text)
+import           Data.String                (IsString)
+import           Data.Text                  (Text, pack)
 import           Prelude                    hiding (error, log)
 
 
 data LogLevel = Debug | Info | Warning | Error deriving (Show, Eq, Ord)
 
-data MessageType = WithBs Text ByteString | JustText Text
-
 data Handle m = Handle
     {
       hConfig     :: Config
-    , hLogMessage :: LogLevel -> MessageType -> m ()
+    , hLogMessage :: LogLevel -> Text -> m ()
     }
 
 newtype Config = Config
@@ -30,12 +28,12 @@ newtype Config = Config
       cDefaultLogLevel :: LogLevel
     }
 
-log :: (Monad m) => Handle m -> LogLevel -> MessageType -> m ()
+log :: (Monad m) => Handle m -> LogLevel -> String -> m ()
 log Handle {..} lvl m
-  | lvl >= (hConfig & cDefaultLogLevel) = hLogMessage lvl m
+  | lvl >= (hConfig & cDefaultLogLevel) = hLogMessage lvl (pack m)
   | otherwise = return ()
 
-debug, info, warning, error :: (Monad m) => Handle m -> MessageType -> m ()
+debug, info, warning, error :: (Monad m) => Handle m -> String -> m ()
 debug h = log h Debug
 info h = log h Info
 warning h = log h Warning

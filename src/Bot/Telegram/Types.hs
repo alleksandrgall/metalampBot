@@ -19,6 +19,7 @@ import           Data.Aeson          (FromJSON (parseJSON), KeyValue ((.=)),
                                       genericToEncoding, genericToJSON, object,
                                       withArray, withObject, (.:), (.:?))
 import           Data.Aeson.Types    (Parser)
+import           Data.Char           (toLower)
 import           Data.Foldable       (Foldable (toList))
 import           Data.Hashable       (Hashable)
 import           Data.Int            (Int64)
@@ -31,7 +32,6 @@ import           Handlers.Bot        (CallbackQuery (..), Command (..),
                                       CommandType (..), MessageGet (..),
                                       MessageSend (..), SendContent (..),
                                       Update (..))
-import           Internal.Utils      (commandFromString)
 
 -- | Type for telegram user info and instances
 data TelegramUserInfo = TelegramUserInfo {
@@ -108,6 +108,14 @@ instance FromJSON (CallbackQuery TelegramUserInfo) where
 -- | Aeson instances for telegram Command
 -- If the message contains a command all other content of the fornamed message will be ignored
 -- If the message contains multiple commands only first one will be processed
+
+commandFromString :: String -> usInf -> Maybe (Command usInf)
+commandFromString c ui = case map toLower c of
+    "/repeat" -> Just $ Command ui Repeat
+    "/help"   -> Just $ Command ui Help
+    "/start"  -> Just $ Command ui Start
+    _         -> Nothing
+
 instance FromJSON (Command TelegramUserInfo) where
     parseJSON (Object o) = do
         ui   <- parseJSON (Object o)
