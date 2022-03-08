@@ -13,7 +13,7 @@ import           Control.Monad.IO.Class     (MonadIO (liftIO))
 import qualified Data.ByteString.Lazy.Char8 as B (hPutStrLn, putStrLn)
 import           Data.Function              ((&))
 import           Data.Maybe                 (fromJust, isJust)
-import           Data.Text                  (pack)
+import           Data.Text                  (Text, pack)
 import           Data.Text.IO               as T (appendFile, hPutStrLn,
                                                   putStrLn)
 import qualified Handlers.Logger            as L
@@ -50,13 +50,7 @@ withHandle c f = do
     else f $ L.Handle (L.Config $ c & cLogLevel) (\l t -> liftIO $ when (c & cToConsole) (printMsg l t))
     where
         msg l t = (pack . show $ l) <> ": " <> t
-        printMsg :: L.LogLevel -> L.MessageType -> IO ()
-        printMsg l (L.JustText t) = T.putStrLn $ msg l t
-        printMsg l (L.WithBs t bs) = do
-             T.putStrLn $ msg l t
-             B.putStrLn bs
-        writeFileMsg :: L.LogLevel -> L.MessageType -> SIO.Handle -> IO ()
-        writeFileMsg l (L.JustText t) h = T.hPutStrLn h $ msg l t
-        writeFileMsg l (L.WithBs t bs) h = do
-            T.hPutStrLn h $ msg l t
-            B.hPutStrLn h bs
+        printMsg :: L.LogLevel -> Text -> IO ()
+        printMsg l t = T.putStrLn $ msg l t
+        writeFileMsg :: L.LogLevel -> Text -> SIO.Handle -> IO ()
+        writeFileMsg l t h = T.hPutStrLn h $ msg l t

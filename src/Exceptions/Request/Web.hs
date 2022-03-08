@@ -16,8 +16,7 @@ import           Network.HTTP.Types  (Status (statusCode, statusMessage))
 
 
 -- | Representation of different exceptions request could result in
-data WebException = CodeMessageException Int Text | NoResponse | SomeWebException SomeException
-    | ConnectionException Text | InvalidUrlException Text Text
+data WebException = CodeMessageException Int Text | ConnectionException Text | InvalidUrlException Text Text
     deriving (Show)
 
 -- | fromException for exceptions from Network.Http.Client
@@ -30,7 +29,7 @@ instance Exception WebException where
                 ConnectionTimeout -> Just $ ConnectionException mempty
                 other -> Nothing
             VanillaHttpException (Http.InvalidUrlException url msg) -> Just $ Exceptions.Request.Web.InvalidUrlException (pack url) $ pack msg
-            other -> Nothing
+            _ -> Nothing
         | otherwise = Nothing
 
         where

@@ -33,7 +33,6 @@ library
       Bot.VK.Types
       Config
       Exceptions.Request
-      Exceptions.Request.Body
       Exceptions.Request.Parse
       Exceptions.Request.Web
       Handlers.Bot

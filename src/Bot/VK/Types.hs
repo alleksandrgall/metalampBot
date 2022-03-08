@@ -8,18 +8,19 @@ module Bot.VK.Types
     where
 
 import           Control.Applicative (Alternative ((<|>)))
-import           Control.Monad       (guard)
+import           Control.Monad       (guard, when)
 import           Data.Aeson          (FromJSON (parseJSON), KeyValue ((.=)),
                                       ToJSON (toJSON), Value (Object), object,
                                       withArray, withObject, withScientific,
-                                      (.:))
+                                      (.:), (.:?))
 import           Data.Aeson.Types    (Parser)
 import           Data.Hashable       (Hashable)
 import           Data.Int            (Int64)
 import           Data.Text           (Text)
 import           GHC.Exts            (IsList (toList), IsString (..))
 import           GHC.Generics        (Generic)
-import           Handlers.Bot        (CallbackQuery (CallbackQuery), Command,
+import           Handlers.Bot        (CallbackQuery (CallbackQuery),
+                                      Command (Command), CommandType (Start),
                                       MessageGet (..), MessageSend, Update (..))
 import           Internal.Utils      (commandFromString)
 
@@ -90,11 +91,17 @@ instance ToJSON VKKeyboard where
 type VKMessageSend = MessageSend VKGettable VKUserInfo
 
 -- | Type for vk command
+startPayload = "{\"command\":\"start\"}"
 instance FromJSON (Command VKUserInfo) where
-    parseJSON obj = parseJSON obj >>= \MessageGet{..} -> do
-        case mgContent of
-            GText txt -> maybe mempty pure (commandFromString txt mgUserInfo)
-            _         -> mempty
+    parseJSON (Object o) = do
+        parseJSON (Object o) >>= \MessageGet{..} -> do
+            p <- (o .:? "payload" :: Parser (Maybe String))
+            if ((== startPayload) <$> p) == Just True then pure $ Command mgUserInfo Start
+            else
+                case mgContent of
+                    GText txt -> maybe mempty pure (commandFromString txt mgUserInfo)
+                    _         -> mempty
+    parseJSON _ = mempty
 
 
 -- | Due to incorrect api behavior payload in callback returns as an int, therefore it should be converted to string first

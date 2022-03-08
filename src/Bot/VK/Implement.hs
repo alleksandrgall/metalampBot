@@ -12,7 +12,7 @@ import           Config                       (AppConfig (..),
                                                Repeat (repeatDefaultNumber, repeatKeyboardMes, repeatMessage),
                                                Start (startMessage))
 
-import           Control.Monad.Catch          (MonadThrow)
+import           Control.Monad.Catch          (MonadCatch, MonadThrow)
 import           Control.Monad.IO.Class       (MonadIO (liftIO))
 import           Data.Aeson                   (FromJSON (parseJSON), ToJSON,
                                                Value (Object), defaultOptions,
@@ -83,7 +83,7 @@ withHandle Config {..} hL f = do
       insertUserRepeat ref ui r = liftIO $ modifyIORef' ref (HM.insert ui r)
 
 
-vkRequest :: (MonadIO m) => String -> L.Handle m  -> Text -> [(Text, Text)] -> m BS.ByteString
+vkRequest :: (MonadCatch m, MonadIO m) => String -> L.Handle m  -> Text -> [(Text, Text)] -> m BS.ByteString
 vkRequest token hL method params =
   makeRequest hL (Nothing :: Maybe String) "api.vk.com" ["method", method] (("v", "5.131"):("access_token", fromString token):params)
 
@@ -96,7 +96,7 @@ instance FromJSON GetLongPollAnswer where
   parseJSON (Object o) = o .: "response" >>= genericParseJSON defaultOptions
   parseJSON _          = mempty
 
-init :: (MonadThrow m, MonadIO m) => IORef Int64 -> IORef String -> IORef String -> String -> Int -> L.Handle m -> m ()
+init :: (MonadCatch m, MonadIO m)  => IORef Int64 -> IORef String -> IORef String -> String -> Int -> L.Handle m -> m ()
 init offsetR keyR serverR token groupId hL = do
   res <- vkRequest token hL "groups.getLongPollServer" [("group_id", fromString . show $ groupId)]
   initInfo <- parseResponse hL res
@@ -105,7 +105,7 @@ init offsetR keyR serverR token groupId hL = do
   liftIO $ writeIORef keyR (key initInfo)
   where getServerPath = reverse . takeWhile (/='/') . reverse
 
-getUpdates :: (MonadThrow m, MonadIO m) => IORef String -> IORef String -> L.Handle m -> Int64 -> m (Maybe Int64, [VKUpdate])
+getUpdates :: (MonadCatch m, MonadIO m) => IORef String -> IORef String -> L.Handle m -> Int64 -> m (Maybe Int64, [VKUpdate])
 getUpdates keyR serverR hL offset = do
   server <- liftIO $ readIORef serverR
   key    <- liftIO $ readIORef keyR
@@ -119,7 +119,7 @@ getUpdates keyR serverR hL offset = do
   if (updRes & newTs) == offset then return (Nothing, updRes & updates)
     else return (Just (updRes & newTs), updRes & updates)
 
-sendMessage :: (MonadIO m) => String -> L.Handle m -> VKMessageSend -> m ()
+sendMessage :: (MonadCatch m, MonadIO m)  => String -> L.Handle m -> VKMessageSend -> m ()
 sendMessage token hL B.MessageSend {..} = void $ vkRequest token hL "messages.send" $
   [buildUserInfo msUserInfo, ("random_id", "0")] ++ messageInfo
   where
@@ -130,7 +130,7 @@ sendMessage token hL B.MessageSend {..} = void $ vkRequest token hL "messages.se
           B.CGettable (GSticker id_)  -> [("sticker_id", fromString . show $ id_)]
           B.CKeyboard txt             -> [("message", txt), ("keyboard", pack . CBS.unpack . encode $ VKKeyboard)]
 
-ansCb :: (MonadIO m) => String -> L.Handle m -> Text -> B.CallbackQuery VKUserInfo -> m ()
+ansCb :: (MonadCatch m, MonadIO m)  => String -> L.Handle m -> Text -> B.CallbackQuery VKUserInfo -> m ()
 ansCb token hL repeatMessage B.CallbackQuery {..} = void $ vkRequest token hL "messages.sendMessageEventAnswer"
   [("event_id", pack cbId),
    ("user_id" , pack .show $ cbUserInfo & uiId),

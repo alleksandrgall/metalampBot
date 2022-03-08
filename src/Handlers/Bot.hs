@@ -84,16 +84,15 @@ data Config = Config {
   }
 
 -- | hInit, hGetUpdates, hSendMes, hAnsCB can throw a `Exceptions.Request.RequestException` or HttpException
-data Handle gettable usInf m = Handle {
+data Handle gettable usInf m = (Monad m) => Handle {
     hConfig           :: Config
   , hLogger           :: L.Handle m
-  , hInit             :: (Monad m) => m ()
-  , hGetUpdates       :: (Monad m) =>
-      Int64 -> m (Maybe Int64, [Update gettable usInf])
-  , hSendMes          :: (IsString gettable, Monad m) =>
+  , hInit             :: m ()
+  , hGetUpdates       :: Int64 -> m (Maybe Int64, [Update gettable usInf])
+  , hSendMes          :: (IsString gettable) =>
       MessageSend gettable usInf -> m ()
   -- | Notify the server and the user that button press was processed
-  , hAnswerCallback   :: (Monad m) => Text -> CallbackQuery usInf -> m ()
+  , hAnswerCallback   :: Text -> CallbackQuery usInf -> m ()
   -- | Getters and setters for offset and repeat counter for each user
   , hGetOffset        :: m Int64
   , hSetOffset        :: Int64 -> m ()
@@ -104,64 +103,61 @@ data Handle gettable usInf m = Handle {
 runBot :: (Monad m, IsString gettable, Show usInf) =>
   Handle gettable usInf m -> m ()
 runBot h@Handle {..} = do
-  L.info hLogger $ L.JustText "Initializing bot..."
+  L.info hLogger "Initializing bot..."
   hInit
-  L.info hLogger $ L.JustText "Bot has been initialized."
+  L.info hLogger "Bot has been initialized."
   forever (go h)
   where
     go h@Handle {..} = hGetOffset >>= hGetUpdates >>= (\(newOffset, uls) -> unless (isNothing newOffset)
-      (L.info hLogger (L.JustText "Got updates.") >> processUpdates h newOffset uls))
+      (L.info hLogger "Got updates." >> processUpdates h newOffset uls))
 
 processUpdates :: (Monad m, IsString gettable, Show usInf) =>
   Handle gettable usInf m -> Maybe Int64 -> [Update gettable usInf] -> m ()
 processUpdates h@Handle {..} newOffset uls = do
-  L.info hLogger $ L.JustText "Processing updates..."
+  L.info hLogger "Processing updates..."
   traverse_ (processUpdateContent h) uls
-  L.info hLogger $ L.JustText "Updates were processed."
+  L.info hLogger "Updates were processed."
   maybe (return ()) hSetOffset newOffset
     where
       processUpdateContent h@Handle {..} = \case
         UCallbackQuary cb -> processCallback h cb
         UCommand c        -> processCommand h c
         UMessage m        -> processMessage h m
-        UnknownUpdate     -> L.info hLogger $ L.JustText "Got an unknown update."
+        UnknownUpdate     -> L.info hLogger $ "Got an unknown update."
 
 processCallback :: (Monad m, Show usInf) => Handle gettable usInf m -> CallbackQuery usInf -> m ()
 processCallback Handle {..} cb@CallbackQuery {..} = do
-  L.info hLogger $ L.JustText ("Processing callback from the " <> (fromString .show $ cbUserInfo) <> "...")
+  L.info hLogger ("Processing callback from the " <> show cbUserInfo <> "...")
   let maybeNewRepeat = readMaybe cbData
       testNewRepeat = (`elem` [1..5]) <$> maybeNewRepeat
   if isNothing testNewRepeat || testNewRepeat == Just False then
-    L.warning hLogger $ L.JustText
-      ("Bad callback data from the " <> (fromString .show $ cbUserInfo) <> ", data: " <> fromString cbData)
+    L.warning hLogger ("Bad callback data from the " <> show cbUserInfo <> ", data: " <> fromString cbData)
   else do
     let newRepeat = fromJust maybeNewRepeat
     hInsertUserRepeat cbUserInfo newRepeat
     hAnswerCallback (hConfig & cRepeatMes) cb
-    L.info hLogger $ L.JustText
-      ("Repeat number of the " <> (fromString .show $ cbUserInfo) <> " was adjusted and answer was send to the user\n\t" <>
-        "New number: " <> (fromString . show $ newRepeat))
+    L.info hLogger ("Repeat number of the " <> show cbUserInfo <> " was adjusted and answer was send to the user\n\t" <>
+        "New number: " <> show newRepeat)
 
 processCommand :: (IsString gettable, Monad m, Show usInf) =>
   Handle gettable usInf m -> Command usInf -> m ()
 processCommand Handle {..} Command {..} = do
-  L.info hLogger $ L.JustText ("Processing command " <> (fromString .show $ cCommandType) <>
-    " from the " <> (fromString .show $ cUserInfo) <> "...")
+  L.info hLogger ("Processing command " <> show cCommandType <> " from the " <> show cUserInfo <> "...")
   case cCommandType of
     Start -> do
       hSendMes $ MessageSend cUserInfo (fromString . unpack $ hConfig & cStartMes)
-      L.info hLogger $ L.JustText ("New user has been added, info:" <> (fromString .show $ cUserInfo))
+      L.info hLogger ("New user has been added, info:" <> show cUserInfo)
     Help -> do
       hSendMes $ MessageSend cUserInfo (fromString . unpack $ hConfig & cHelpMes)
-      L.info hLogger $ L.JustText ("Help message was sent to the " <> (fromString .show $ cUserInfo))
+      L.info hLogger ("Help message was sent to the " <> show cUserInfo)
     Repeat -> do
       hSendMes $ MessageSend cUserInfo $ CKeyboard (hConfig & cRepeatKeyboardMes)
-      L.info hLogger $ L.JustText ("Keyboard was sent to the " <> (fromString .show $ cUserInfo))
+      L.info hLogger ("Keyboard was sent to the " <> show cUserInfo)
 
 processMessage :: (IsString gettable, Monad m, Show usInf) =>
   Handle gettable usInf m -> MessageGet gettable usInf -> m ()
 processMessage Handle {..} MessageGet {..} = do
-  L.info hLogger $ L.JustText ("Processing message from the " <> (fromString .show $ mgUserInfo))
+  L.info hLogger $ "Processing message from the " <> show mgUserInfo
   userRepeat <- maybe (return (hConfig & cBaseRepeat)) return =<< hGetUserRepeat mgUserInfo
   replicateM_ userRepeat (hSendMes $ MessageSend mgUserInfo (CGettable mgContent))
-  L.info hLogger $ L.JustText ("Message was sent " <> (fromString .show $ userRepeat) <> " times to the " <> (fromString .show $ mgUserInfo))
+  L.info hLogger $ "Message was sent " <> show userRepeat <> " times to the " <> show mgUserInfo
