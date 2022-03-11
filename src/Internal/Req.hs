@@ -3,25 +3,22 @@ module Internal.Req (makeRequest, parseResponse) where
 
 import           Control.Concurrent         (threadDelay)
 import           Control.Monad.Catch        (Exception (fromException, toException),
-                                             MonadCatch, MonadThrow, handle,
-                                             throwM)
-import           Control.Monad.IO.Class     (MonadIO (liftIO))
-import           Data.Aeson                 (FromJSON (parseJSON), ToJSON,
-                                             Value (Object), eitherDecode, (.:))
+                                             MonadCatch, MonadThrow (..),
+                                             handle)
+import           Control.Monad.IO.Class     (MonadIO (..))
+import           Data.Aeson                 (FromJSON, ToJSON, eitherDecode)
 import qualified Data.ByteString.Lazy       as B
 import qualified Data.ByteString.Lazy.Char8 as BC
 import           Data.Function              ((&))
 import           Data.String                (IsString (fromString))
-import           Data.Text                  (Text, intercalate, pack, unpack)
+import           Data.Text                  (Text, intercalate, unpack)
 import           Exceptions.Request
 import qualified Handlers.Logger            as L
-import           Internal.Types             (Token)
-import           Network.HTTP.Client        (ManagerSettings)
 import           Network.HTTP.Req           (GET (GET), LbsResponse,
                                              NoReqBody (NoReqBody), POST (POST),
                                              QueryParam,
                                              ReqBodyJson (ReqBodyJson),
-                                             defaultHttpConfig, http, https,
+                                             defaultHttpConfig, https,
                                              lbsResponse, req, responseBody,
                                              responseStatusCode,
                                              responseStatusMessage, runReq,
@@ -50,8 +47,10 @@ makeRequest hLogger maybeBody url methods params = do
     where targetUrl = url <> "/" <> intercalate "/" methods <> "?" <> (intercalate "&" . map (\(k, v) -> k <> "=" <> v) $ params)
 
 handleWeb :: (MonadIO m, MonadCatch m) => L.Handle m -> Text -> m a -> m a
-handleWeb hL targetUrl m = handle (\e -> case fromException e of
-    Just (CodeMessageException code mes) -> do
+handleWeb hL targetUrl m =
+    L.error hL (unpack $ "Error occured while requesting to: " <> targetUrl) >>
+    handle (\e -> case fromException e of
+    Just (CodeMessageException code _) -> do
         if code == 429 then do
             L.error hL "To many requests, 25 seconds delay"
             liftIO $ threadDelay 25000
@@ -63,7 +62,7 @@ handleWeb hL targetUrl m = handle (\e -> case fromException e of
         m
     Just (InvalidUrlException url mes) -> do
         L.error hL $ "Invalid url: " <> unpack url <> "\n message: " <> unpack mes
-        liftIO $ exitFailure
+        liftIO exitFailure
     Nothing -> throwM e) m
 
 
@@ -93,7 +92,6 @@ sendRequestReq maybeBody url methods params =
             queryParams))
         maybeBody
     where
-        builtHttp = foldl (/:) (http url) methods
         builtHttps = foldl (/:) (https url) methods
         queryParams :: (QueryParam p, Monoid p) => p
         queryParams = mconcat $ fmap (uncurry (=:)) params

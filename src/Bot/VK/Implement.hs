@@ -6,15 +6,10 @@ import           Bot.VK.Types                 (SnackBar (SnackBar),
                                                VKMessageSend, VKUpdate,
                                                VKUpdateResult (newTs, updates),
                                                VKUserInfo (..))
-import           Config                       (AppConfig (..),
-                                               GroupId (GroupId),
-                                               Help (helpMessage),
-                                               Repeat (repeatDefaultNumber, repeatKeyboardMes, repeatMessage),
-                                               Start (startMessage))
-
-import           Control.Monad.Catch          (MonadCatch, MonadThrow)
+import           Config
+import           Control.Monad.Catch          (MonadCatch)
 import           Control.Monad.IO.Class       (MonadIO (liftIO))
-import           Data.Aeson                   (FromJSON (parseJSON), ToJSON,
+import           Data.Aeson                   (FromJSON (parseJSON),
                                                Value (Object), defaultOptions,
                                                encode, genericParseJSON, (.:))
 import qualified Data.ByteString.Lazy         as BS (ByteString)
@@ -55,15 +50,14 @@ data Config = Config {
   , cGroupId           :: Int
 }
 
--- withHandle :: (MonadMask m, MonadIO m) =>
---     Config -> L.Handle m -> (B.Handle ... m -> m a) -> m a
+withHandle :: (MonadCatch m, MonadIO m) =>
+    Config -> L.Handle m -> (B.Handle VKGettable VKUserInfo m -> m a) -> m a
 withHandle Config {..} hL f = do
     offset <- liftIO $ newIORef 0
     userRepeat <- liftIO $ newIORef (mempty :: HM.HashMap VKUserInfo Int)
     key <- liftIO $ newIORef ""
     server <- liftIO $ newIORef ""
-    let c = B.Config cBaseRepeat cStartMes cHelpMes cRepeatMes cRepeatKeyboardMes
-        h = B.Handle {
+    let h = B.Handle {
           hConfig             = B.Config cBaseRepeat cStartMes cHelpMes cRepeatMes cRepeatKeyboardMes
         , hLogger             = hL
         , hInit               = init offset key server cToken cGroupId hL

@@ -8,11 +8,9 @@ module Handlers.Logger
   , warning
   , error) where
 
-import           Data.ByteString.Lazy.Char8 (ByteString)
-import           Data.Function              ((&))
-import           Data.String                (IsString)
-import           Data.Text                  (Text, pack)
-import           Prelude                    hiding (error, log)
+import           Data.Function ((&))
+import           Data.Text     (Text, pack)
+import           Prelude       hiding (error, log)
 
 
 data LogLevel = Debug | Info | Warning | Error deriving (Show, Eq, Ord)

@@ -1,18 +1,13 @@
 
 module Main where
-import qualified Bot.Telegram         as TG
-import qualified Bot.VK               as VK
-import           Bot.VK.Types
-import           Config               (AppConfig (appConfigGroupId, appConfigMessenger, appConfigToken),
-                                       GroupId (GroupId), Messenger (Tele, VK),
-                                       fetchConfig)
-import           Control.Monad        (when)
-import           Data.Aeson           (eitherDecode, eitherDecodeFileStrict)
-import qualified Data.ByteString.Lazy as B
-import           Data.Function        ((&))
-import           Handlers.Bot         (runBot)
-import qualified Handlers.Logger      as L
-import qualified Logger.IO            as Lio
+import qualified Bot.Telegram    as TG
+import qualified Bot.VK          as VK
+import           Config
+import           Control.Monad   (when)
+import           Data.Function   ((&))
+import           Handlers.Bot    (runBot)
+import qualified Handlers.Logger as L
+import qualified Logger.IO       as Lio
 
 
 main :: IO ()

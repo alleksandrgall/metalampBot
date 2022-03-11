@@ -11,11 +11,9 @@ import           Conferer.FromConfig            (FromConfig (fromConfig),
 import           Conferer.Source.CLIArgs        as CLI (fromConfig)
 import           Conferer.Source.PropertiesFile as Files (fromFilePath)
 import           Conferer.Source.PropertiesFile as Prop (fromConfig)
-import           Data.Text                      (Text, empty, toLower)
+import           Data.Text                      (Text, toLower)
 import           GHC.Generics                   (Generic)
-
 import           Handlers.Logger                (LogLevel (..))
-import           Internal.Types                 (Token)
 
 data Messenger = Tele | VK deriving (Show, Eq)
 instance FromConfig Messenger where
@@ -65,7 +63,7 @@ instance FromConfig Logger
 
 data AppConfig = AppConfig
     {
-        appConfigToken     :: Token,
+        appConfigToken     :: String,
         appConfigMessenger :: Messenger,
         appConfigStart     :: Start,
         appConfigRepeat    :: Repeat,

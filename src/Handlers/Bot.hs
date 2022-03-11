@@ -18,18 +18,15 @@ module Handlers.Bot
   ,CallbackQuery(..)
   ) where
 
-import           Control.Monad       (foldM, forever, replicateM_, unless, when)
-import           Control.Monad.Catch (MonadCatch, MonadThrow (throwM), handle)
-import           Data.Foldable       (traverse_)
-import           Data.Function       ((&))
-import           Data.Int            (Int64)
-import           Data.Maybe          (fromJust, isNothing)
-import           Data.String         (IsString (..))
-import           Data.Text           (Text, pack, unpack)
-import           GHC.Generics        (Generic)
-import qualified Handlers.Logger     as L
-import           Internal.Types      (Token)
-import           Text.Read           (readMaybe)
+import           Control.Monad   (forever, replicateM_, unless)
+import           Data.Foldable   (traverse_)
+import           Data.Function   ((&))
+import           Data.Int        (Int64)
+import           Data.Maybe      (fromJust, isNothing)
+import           Data.String     (IsString (..))
+import           Data.Text       (Text, unpack)
+import qualified Handlers.Logger as L
+import           Text.Read       (readMaybe)
 
 data MessageGet gettable usInf = MessageGet {
     mgUserInfo :: usInf
@@ -106,24 +103,24 @@ runBot h@Handle {..} = do
   L.info hLogger "Initializing bot..."
   hInit
   L.info hLogger "Bot has been initialized."
-  forever (go h)
+  forever go
   where
-    go h@Handle {..} = hGetOffset >>= hGetUpdates >>= (\(newOffset, uls) -> unless (isNothing newOffset)
+    go = hGetOffset >>= hGetUpdates >>= (\(newOffset, uls) -> unless (isNothing newOffset)
       (L.info hLogger "Got updates." >> processUpdates h newOffset uls))
 
 processUpdates :: (Monad m, IsString gettable, Show usInf) =>
   Handle gettable usInf m -> Maybe Int64 -> [Update gettable usInf] -> m ()
 processUpdates h@Handle {..} newOffset uls = do
   L.info hLogger "Processing updates..."
-  traverse_ (processUpdateContent h) uls
+  traverse_ processUpdateContent uls
   L.info hLogger "Updates were processed."
   maybe (return ()) hSetOffset newOffset
     where
-      processUpdateContent h@Handle {..} = \case
+      processUpdateContent = \case
         UCallbackQuary cb -> processCallback h cb
         UCommand c        -> processCommand h c
         UMessage m        -> processMessage h m
-        UnknownUpdate     -> L.info hLogger $ "Got an unknown update."
+        UnknownUpdate     -> L.info hLogger "Got an unknown update."
 
 processCallback :: (Monad m, Show usInf) => Handle gettable usInf m -> CallbackQuery usInf -> m ()
 processCallback Handle {..} cb@CallbackQuery {..} = do
