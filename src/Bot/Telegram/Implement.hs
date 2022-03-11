@@ -1,10 +1,6 @@
 module Bot.Telegram.Implement (Config(..), parseConfig, withHandle) where
 
-import           Bot.Telegram.Types     (TelegramGettable (GSticker),
-                                         TelegramMessageSend,
-                                         TelegramResult (..), TelegramUpdate,
-                                         TelegramUpdateWithId (..),
-                                         TelegramUserInfo)
+import           Bot.Telegram.Types
 import           Config
 import           Control.Monad          (void)
 import           Control.Monad.Catch    (MonadCatch)
@@ -13,7 +9,6 @@ import           Data.Aeson             (KeyValue ((.=)), ToJSON (toJSON),
                                          Value (Array), object)
 import qualified Data.ByteString.Lazy   as BS
 import           Data.Function          ((&))
-import           Data.Functor           ((<&>))
 import qualified Data.HashMap.Lazy      as HM
 import           Data.IORef             (modifyIORef', newIORef, readIORef,
                                          writeIORef)
@@ -50,9 +45,8 @@ withHandle :: (MonadCatch m, MonadIO m) =>
 withHandle Config {..} hL f = do
     offset <- liftIO $ newIORef 0
     userRepeat <- liftIO $ newIORef (mempty :: HM.HashMap TelegramUserInfo Int)
-    let c = B.Config cBaseRepeat cStartMes cHelpMes cRepeatMes cRepeatKeyboardMes
-        h = B.Handle {
-          hConfig             = c
+    let h = B.Handle {
+          hConfig             = B.Config cBaseRepeat cStartMes cHelpMes cRepeatMes cRepeatKeyboardMes
         , hLogger             = hL
         , hInit               = init cToken hL
         , hGetUpdates         = getUpdates cToken hL
@@ -67,7 +61,7 @@ withHandle Config {..} hL f = do
     where
         getOffset ref = liftIO $ readIORef ref
         setOffset ref offset = liftIO $ writeIORef ref offset
-        getUserRepeat ref ui = (liftIO . readIORef $ ref) <&> HM.lookup ui
+        getUserRepeat ref ui = fmap (HM.lookup ui) (liftIO . readIORef $ ref)
         insertUserRepeat ref ui r = liftIO $ modifyIORef' ref (HM.insert ui r)
 
 request :: (MonadCatch m, MonadIO m, ToJSON b) => String -> L.Handle m -> Maybe b -> Text -> [(Text, Text)] -> m BS.ByteString

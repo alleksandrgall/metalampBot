@@ -11,13 +11,7 @@ where
 
 import           Control.Applicative (Alternative ((<|>)))
 import           Control.Monad       (guard)
-import           Data.Aeson          (FromJSON (parseJSON), KeyValue ((.=)),
-                                      Options (fieldLabelModifier),
-                                      ToJSON (toEncoding, toJSON),
-                                      Value (Object, String), camelTo2,
-                                      defaultOptions, genericParseJSON,
-                                      genericToEncoding, genericToJSON, object,
-                                      withArray, withObject, (.:), (.:?))
+import           Data.Aeson
 import           Data.Aeson.Types    (Parser)
 import           Data.Char           (toLower)
 import           Data.Foldable       (Foldable (toList))

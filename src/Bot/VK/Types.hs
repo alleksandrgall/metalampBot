@@ -4,15 +4,12 @@ module Bot.VK.Types
     VKGettable (GSticker, GText),
     VKMessageSend, VKUpdate,
     VKUpdateResult (newTs, updates),
-    VKUserInfo (..), VKKeyboard(..))
+    VKUserInfo (..), VKKeyboard(..), GetLongPollAnswer (..))
     where
 
 import           Control.Applicative (Alternative ((<|>)))
 import           Control.Monad       (guard, when)
-import           Data.Aeson          (FromJSON (parseJSON), KeyValue ((.=)),
-                                      ToJSON (toJSON), Value (Object), object,
-                                      withArray, withObject, withScientific,
-                                      (.:), (.:?))
+import           Data.Aeson
 import           Data.Aeson.Types    (Parser)
 import           Data.Hashable       (Hashable)
 import           Data.Int            (Int64)
@@ -23,6 +20,17 @@ import           Handlers.Bot        (CallbackQuery (CallbackQuery),
                                       Command (Command), CommandType (Start),
                                       MessageGet (..), MessageSend, Update (..))
 import           Internal.Utils      (commandFromString)
+
+-- | Type for vk long poll server info used
+data GetLongPollAnswer = GetLongPollAnswer {
+  key    :: String,
+  server :: String,
+  ts     :: String
+} deriving (Show, Generic)
+instance FromJSON GetLongPollAnswer where
+  parseJSON (Object o) = o .: "response" >>= genericParseJSON defaultOptions
+  parseJSON _          = mempty
+
 
 -- | Type for VK result of getUpdate
 data VKUpdateResult = VKUpdateResult {

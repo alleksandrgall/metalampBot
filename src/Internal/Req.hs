@@ -48,24 +48,24 @@ makeRequest hLogger maybeBody url methods params = do
 
 handleWeb :: (MonadIO m, MonadCatch m) => L.Handle m -> Text -> m a -> m a
 handleWeb hL targetUrl m =
-    L.error hL (unpack $ "Error occured while requesting to: " <> targetUrl) >>
     handle (\e -> case fromException e of
     Just (CodeMessageException code _) -> do
         if code == 429 then do
+            L.error hL (unpack $ "Error occured while requesting to: " <> targetUrl)
             L.error hL "To many requests, 25 seconds delay"
             liftIO $ threadDelay 25000
             m
         else throwM . toException $ e
     Just (ConnectionException t) -> do
+        L.error hL (unpack $ "Error occured while requesting to: " <> targetUrl)
         L.error hL $ "Connection failure: " <> unpack t <> "\n 25 seconds delay"
         liftIO $ threadDelay 25000
         m
     Just (InvalidUrlException url mes) -> do
+        L.error hL (unpack $ "Error occured while requesting to: " <> targetUrl)
         L.error hL $ "Invalid url: " <> unpack url <> "\n message: " <> unpack mes
         liftIO exitFailure
     Nothing -> throwM e) m
-
-
 
 -- | Function to make requests using Network.HTTP.Req library
 --
