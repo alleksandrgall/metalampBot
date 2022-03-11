@@ -9,7 +9,7 @@ Echo chat bot creatred as requested by MetaLamp. Implemented for TG and VK.
    `stack build` for building app and downloading dependencies.
 6. `stack exec metaLampBot` for running your bot.
 
-You can run tests of logic with `stack test`
+You can run tests of logic with `stack test`.
 
 ## Project structer
 * `app/Main.hs` - Parses config, runs an appropriate bot implementation.
