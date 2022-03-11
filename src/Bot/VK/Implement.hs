@@ -1,12 +1,8 @@
 
 module Bot.VK.Implement where
-import           Bot.VK.Types                 (SnackBar (SnackBar),
-                                               VKGettable (GSticker, GText),
-                                               VKKeyboard (VKKeyboard),
-                                               VKMessageSend, VKUpdate,
-                                               VKUpdateResult (newTs, updates),
-                                               VKUserInfo (..))
+import           Bot.VK.Types
 import           Config
+import           Control.Monad                (void)
 import           Control.Monad.Catch          (MonadCatch)
 import           Control.Monad.IO.Class       (MonadIO (liftIO))
 import           Data.Aeson                   (FromJSON (parseJSON),
@@ -16,7 +12,6 @@ import qualified Data.ByteString.Lazy         as BS (ByteString)
 import qualified Data.ByteString.Lazy.Char8   as CBS (unpack)
 import           Data.Coerce                  (coerce)
 import           Data.Function                ((&))
-import           Data.Functor                 (void, (<&>))
 import qualified Data.HashMap.Internal.Strict as HM (HashMap, insert, lookup)
 import           Data.IORef                   (IORef, modifyIORef', newIORef,
                                                readIORef, writeIORef)
@@ -73,22 +68,13 @@ withHandle Config {..} hL f = do
       where
       getOffset ref = liftIO $ readIORef ref
       setOffset ref offset = liftIO $ writeIORef ref offset
-      getUserRepeat ref ui = (liftIO . readIORef $ ref) <&> HM.lookup ui
+      getUserRepeat ref ui = fmap (HM.lookup ui) (liftIO . readIORef $ ref)
       insertUserRepeat ref ui r = liftIO $ modifyIORef' ref (HM.insert ui r)
 
 
 vkRequest :: (MonadCatch m, MonadIO m) => String -> L.Handle m  -> Text -> [(Text, Text)] -> m BS.ByteString
 vkRequest token hL method params =
   makeRequest hL (Nothing :: Maybe String) "api.vk.com" ["method", method] (("v", "5.131"):("access_token", fromString token):params)
-
-data GetLongPollAnswer = GetLongPollAnswer {
-  key    :: String,
-  server :: String,
-  ts     :: String
-} deriving (Show, Generic)
-instance FromJSON GetLongPollAnswer where
-  parseJSON (Object o) = o .: "response" >>= genericParseJSON defaultOptions
-  parseJSON _          = mempty
 
 init :: (MonadCatch m, MonadIO m)  => IORef Int64 -> IORef String -> IORef String -> String -> Int -> L.Handle m -> m ()
 init offsetR keyR serverR token groupId hL = do

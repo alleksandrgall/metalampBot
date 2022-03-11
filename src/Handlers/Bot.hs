@@ -1,6 +1,5 @@
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE QuantifiedConstraints #-}
-{-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
 module Handlers.Bot
   (Config(..)
   ,Handle(..)
@@ -18,15 +17,16 @@ module Handlers.Bot
   ,CallbackQuery(..)
   ) where
 
-import           Control.Monad   (forever, replicateM_, unless)
-import           Data.Foldable   (traverse_)
-import           Data.Function   ((&))
-import           Data.Int        (Int64)
-import           Data.Maybe      (fromJust, isNothing)
-import           Data.String     (IsString (..))
-import           Data.Text       (Text, unpack)
-import qualified Handlers.Logger as L
-import           Text.Read       (readMaybe)
+import           Control.Monad       (forever, replicateM_, unless)
+import           Control.Monad.Catch (MonadCatch)
+import           Data.Foldable       (traverse_)
+import           Data.Function       ((&))
+import           Data.Int            (Int64)
+import           Data.Maybe          (fromJust, isNothing)
+import           Data.String         (IsString (..))
+import           Data.Text           (Text, unpack)
+import qualified Handlers.Logger     as L
+import           Text.Read           (readMaybe)
 
 data MessageGet gettable usInf = MessageGet {
     mgUserInfo :: usInf
@@ -80,17 +80,13 @@ data Config = Config {
   , cRepeatKeyboardMes :: Text
   }
 
--- | hInit, hGetUpdates, hSendMes, hAnsCB can throw a `Exceptions.Request.RequestException` or HttpException
-data Handle gettable usInf m = (Monad m) => Handle {
+data Handle gettable usInf m = (MonadCatch m) => Handle {
     hConfig           :: Config
   , hLogger           :: L.Handle m
   , hInit             :: m ()
   , hGetUpdates       :: Int64 -> m (Maybe Int64, [Update gettable usInf])
-  , hSendMes          :: (IsString gettable) =>
-      MessageSend gettable usInf -> m ()
-  -- | Notify the server and the user that button press was processed
+  , hSendMes          :: (IsString gettable) => MessageSend gettable usInf -> m ()
   , hAnswerCallback   :: Text -> CallbackQuery usInf -> m ()
-  -- | Getters and setters for offset and repeat counter for each user
   , hGetOffset        :: m Int64
   , hSetOffset        :: Int64 -> m ()
   , hInsertUserRepeat :: usInf -> Int -> m ()
@@ -156,5 +152,5 @@ processMessage :: (IsString gettable, Monad m, Show usInf) =>
 processMessage Handle {..} MessageGet {..} = do
   L.info hLogger $ "Processing message from the " <> show mgUserInfo
   userRepeat <- maybe (return (hConfig & cBaseRepeat)) return =<< hGetUserRepeat mgUserInfo
-  replicateM_ userRepeat (hSendMes $ MessageSend mgUserInfo (CGettable mgContent))
+  replicateM_ userRepeat $ hSendMes (MessageSend mgUserInfo (CGettable mgContent))
   L.info hLogger $ "Message was sent " <> show userRepeat <> " times to the " <> show mgUserInfo
