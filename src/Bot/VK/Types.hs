@@ -54,7 +54,6 @@ instance FromJSON VKUserInfo where
     parseJSON (Object o) = VKUserInfo <$> (o .: "from_id" <|> o .: "user_id") <*> (o .: "peer_id")
     parseJSON _          = mempty
 
-
 -- | Type and instances for gettable vk content
 data VKGettable = GText String | GSticker Int64
     deriving (Show)
@@ -112,10 +111,9 @@ instance FromJSON (Command VKUserInfo) where
     parseJSON _ = mempty
 
 
+-- | Instance for vk callback query
 -- | Due to incorrect api behavior payload in callback returns as an int, therefore it should be converted to string first
 newtype Payload = Payload { unpayload :: String} deriving (Show)
-
--- | Instance for vk callback query
 instance FromJSON Payload where
     parseJSON (Object o) = Payload <$> (o .: "payload" >>= withScientific "Int payload" (return . show . round))
     parseJSON _ = mempty

@@ -17,16 +17,15 @@ module Handlers.Bot
   ,CallbackQuery(..)
   ) where
 
-import           Control.Monad       (forever, replicateM_, unless)
-import           Control.Monad.Catch (MonadCatch)
-import           Data.Foldable       (traverse_)
-import           Data.Function       ((&))
-import           Data.Int            (Int64)
-import           Data.Maybe          (fromJust, isNothing)
-import           Data.String         (IsString (..))
-import           Data.Text           (Text, unpack)
-import qualified Handlers.Logger     as L
-import           Text.Read           (readMaybe)
+import           Control.Monad   (forever, replicateM_, unless)
+import           Data.Foldable   (traverse_)
+import           Data.Function   ((&))
+import           Data.Int        (Int64)
+import           Data.Maybe      (fromJust, isNothing)
+import           Data.String     (IsString (..))
+import           Data.Text       (Text, unpack)
+import qualified Handlers.Logger as L
+import           Text.Read       (readMaybe)
 
 data MessageGet gettable usInf = MessageGet {
     mgUserInfo :: usInf
@@ -80,7 +79,7 @@ data Config = Config {
   , cRepeatKeyboardMes :: Text
   }
 
-data Handle gettable usInf m = (MonadCatch m) => Handle {
+data Handle gettable usInf m = (Monad m) => Handle {
     hConfig           :: Config
   , hLogger           :: L.Handle m
   , hInit             :: m ()
@@ -101,8 +100,8 @@ runBot h@Handle {..} = do
   L.info hLogger "Bot has been initialized."
   forever go
   where
-    go = hGetOffset >>= hGetUpdates >>= (\(newOffset, uls) -> unless (isNothing newOffset)
-      (L.info hLogger "Got updates." >> processUpdates h newOffset uls))
+    go = hGetOffset >>= hGetUpdates >>=
+      \(newOffset, uls) -> unless (isNothing newOffset) (processUpdates h newOffset uls)
 
 processUpdates :: (Monad m, IsString gettable, Show usInf) =>
   Handle gettable usInf m -> Maybe Int64 -> [Update gettable usInf] -> m ()
@@ -123,14 +122,13 @@ processCallback Handle {..} cb@CallbackQuery {..} = do
   L.info hLogger ("Processing callback from the " <> show cbUserInfo <> "...")
   let maybeNewRepeat = readMaybe cbData
       testNewRepeat = (`elem` [1..5]) <$> maybeNewRepeat
-  if isNothing testNewRepeat || testNewRepeat == Just False then
-    L.warning hLogger ("Bad callback data from the " <> show cbUserInfo <> ", data: " <> fromString cbData)
-  else do
+  if testNewRepeat == Just True then do
     let newRepeat = fromJust maybeNewRepeat
-    hInsertUserRepeat cbUserInfo newRepeat
+    hInsertUserRepeat cbUserInfo (fromJust maybeNewRepeat)
     hAnswerCallback (hConfig & cRepeatMes) cb
     L.info hLogger ("Repeat number of the " <> show cbUserInfo <> " was adjusted and answer was send to the user\n\t" <>
         "New number: " <> show newRepeat)
+  else L.warning hLogger ("Bad callback data from the " <> show cbUserInfo <> ", data: " <> fromString cbData)
 
 processCommand :: (IsString gettable, Monad m, Show usInf) =>
   Handle gettable usInf m -> Command usInf -> m ()

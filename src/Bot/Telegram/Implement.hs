@@ -5,8 +5,7 @@ import           Config
 import           Control.Monad          (void)
 import           Control.Monad.Catch    (MonadCatch)
 import           Control.Monad.IO.Class (MonadIO (liftIO))
-import           Data.Aeson             (KeyValue ((.=)), ToJSON (toJSON),
-                                         Value (Array), object)
+import           Data.Aeson             (ToJSON)
 import qualified Data.ByteString.Lazy   as BS
 import           Data.Function          ((&))
 import qualified Data.HashMap.Lazy      as HM
@@ -20,6 +19,7 @@ import           GHC.Generics           (Generic)
 import qualified Handlers.Bot           as B
 import qualified Handlers.Logger        as L
 import           Internal.Req           (makeRequest, parseResponse)
+import           Internal.Utils         (handleWeb)
 import           Prelude                hiding (init)
 
 parseConfig :: AppConfig -> Config
@@ -46,16 +46,16 @@ withHandle Config {..} hL f = do
     offset <- liftIO $ newIORef 0
     userRepeat <- liftIO $ newIORef (mempty :: HM.HashMap TelegramUserInfo Int)
     let h = B.Handle {
-          hConfig             = B.Config cBaseRepeat cStartMes cHelpMes cRepeatMes cRepeatKeyboardMes
-        , hLogger             = hL
-        , hInit               = init cToken hL
-        , hGetUpdates         = getUpdates cToken hL
-        , hSendMes            = sendMes cToken hL
-        , hAnswerCallback     = ansCb cToken hL
-        , hGetOffset          = getOffset offset
-        , hSetOffset          = setOffset offset
-        , hInsertUserRepeat   = insertUserRepeat userRepeat
-        , hGetUserRepeat      = getUserRepeat userRepeat
+          hConfig           = B.Config cBaseRepeat cStartMes cHelpMes cRepeatMes cRepeatKeyboardMes
+        , hLogger           = hL
+        , hInit             = handleWeb hL "initializing bot" () $ init cToken hL
+        , hGetUpdates       = handleWeb hL "getting updates" (Nothing, []) . getUpdates cToken hL
+        , hSendMes          = handleWeb hL "sending message" () . sendMes cToken hL
+        , hAnswerCallback   = \t cb -> handleWeb hL "answering callback" () $ ansCb cToken hL t cb
+        , hGetOffset        = getOffset offset
+        , hSetOffset        = setOffset offset
+        , hInsertUserRepeat = insertUserRepeat userRepeat
+        , hGetUserRepeat    = getUserRepeat userRepeat
     }
     f h
     where
@@ -66,11 +66,6 @@ withHandle Config {..} hL f = do
 
 request :: (MonadCatch m, MonadIO m, ToJSON b) => String -> L.Handle m -> Maybe b -> Text -> [(Text, Text)] -> m BS.ByteString
 request token hL body method = makeRequest hL body "api.telegram.org" ["bot" <> fromString token, method]
-{-# INLINE request #-}
-
-newtype Commands = Commands [(Text, Text)] deriving Generic
-instance ToJSON Commands where
-    toJSON (Commands ls) = object ["commands" .= Array (fromList (map (\(c, d) -> object ["command" .= c, "description" .= d]) ls))]
 
 init :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> m ()
 init token hL = void $ request token hL (Just $ Commands
@@ -78,7 +73,6 @@ init token hL = void $ request token hL (Just $ Commands
          ("/help"  , "Use to get help."),
          ("/start" , "Use to see a start message")])
          "setMyCommands" []
-
 
 getUpdates :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> Int64 -> m (Maybe Int64, [TelegramUpdate])
 getUpdates token hL offset = do

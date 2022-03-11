@@ -5,9 +5,7 @@ import           Config
 import           Control.Monad                (void)
 import           Control.Monad.Catch          (MonadCatch)
 import           Control.Monad.IO.Class       (MonadIO (liftIO))
-import           Data.Aeson                   (FromJSON (parseJSON),
-                                               Value (Object), defaultOptions,
-                                               encode, genericParseJSON, (.:))
+import           Data.Aeson                   (encode)
 import qualified Data.ByteString.Lazy         as BS (ByteString)
 import qualified Data.ByteString.Lazy.Char8   as CBS (unpack)
 import           Data.Coerce                  (coerce)
@@ -22,6 +20,7 @@ import           GHC.Generics                 (Generic)
 import qualified Handlers.Bot                 as B
 import qualified Handlers.Logger              as L
 import           Internal.Req                 (makeRequest, parseResponse)
+import           Internal.Utils               (handleWeb)
 import           Prelude                      hiding (init)
 
 
@@ -53,16 +52,16 @@ withHandle Config {..} hL f = do
     key <- liftIO $ newIORef ""
     server <- liftIO $ newIORef ""
     let h = B.Handle {
-          hConfig             = B.Config cBaseRepeat cStartMes cHelpMes cRepeatMes cRepeatKeyboardMes
-        , hLogger             = hL
-        , hInit               = init offset key server cToken cGroupId hL
-        , hGetUpdates         = getUpdates key server hL
-        , hSendMes            = sendMessage cToken hL
-        , hAnswerCallback     = ansCb cToken hL
-        , hGetOffset          = getOffset offset
-        , hSetOffset          = setOffset offset
-        , hInsertUserRepeat   = insertUserRepeat userRepeat
-        , hGetUserRepeat      = getUserRepeat userRepeat
+          hConfig           = B.Config cBaseRepeat cStartMes cHelpMes cRepeatMes cRepeatKeyboardMes
+        , hLogger           = hL
+        , hInit             = handleWeb hL "initializing bot" () $ init offset key server cToken cGroupId hL
+        , hGetUpdates       = handleWeb hL "getting updates" (Nothing, []) . getUpdates key server hL
+        , hSendMes          = handleWeb hL "sending message" () . sendMes cToken hL
+        , hAnswerCallback   = \t cb -> handleWeb hL "answering callback" () $ ansCb cToken hL t cb
+        , hGetOffset        = getOffset offset
+        , hSetOffset        = setOffset offset
+        , hInsertUserRepeat = insertUserRepeat userRepeat
+        , hGetUserRepeat    = getUserRepeat userRepeat
     }
     f h
       where
@@ -99,8 +98,8 @@ getUpdates keyR serverR hL offset = do
   if (updRes & newTs) == offset then return (Nothing, updRes & updates)
     else return (Just (updRes & newTs), updRes & updates)
 
-sendMessage :: (MonadCatch m, MonadIO m)  => String -> L.Handle m -> VKMessageSend -> m ()
-sendMessage token hL B.MessageSend {..} = void $ vkRequest token hL "messages.send" $
+sendMes :: (MonadCatch m, MonadIO m)  => String -> L.Handle m -> VKMessageSend -> m ()
+sendMes token hL B.MessageSend {..} = void $ vkRequest token hL "messages.send" $
   [buildUserInfo msUserInfo, ("random_id", "0")] ++ messageInfo
   where
     buildUserInfo VKUserInfo {..} = if uiId == uiPeerId then ("user_id", fromString . show $ uiId)

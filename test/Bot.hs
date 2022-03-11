@@ -4,10 +4,7 @@
 module Bot where
 
 import           Control.Monad                (Monad (..), mapM_, when)
-import           Control.Monad.RWS            (MonadState (get, put),
-                                               MonadWriter (tell),
-                                               Monoid (mempty), RWS, asks,
-                                               modify, runRWS, (<>))
+import           Control.Monad.RWS
 import           Data.Bifunctor               (Bifunctor (first, second))
 import           Data.Function                ((&))
 import           Data.HashMap.Internal.Strict (HashMap, insert, lookup)
@@ -71,7 +68,7 @@ mockHandle = B.Handle {
         , hInit               = return ()
         , hGetUpdates         = \offset -> asks (\upds -> if null upds then (Nothing, upds) else (Just 1, upds))
         , hSendMes            = \B.MessageSend {..} -> tell [Message msUserInfo msContent]
-        , hAnswerCallback     = \t cb               -> tell [CBAnswer t cb]
+        , hAnswerCallback     = \t cb -> tell [CBAnswer t cb]
         , hGetOffset          = fst <$> get
         , hSetOffset          = modify . first . const
         , hInsertUserRepeat   = \ui r -> modify (second (insert ui r))

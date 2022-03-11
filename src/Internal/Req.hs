@@ -14,15 +14,7 @@ import           Data.String                (IsString (fromString))
 import           Data.Text                  (Text, intercalate, unpack)
 import           Exceptions.Request
 import qualified Handlers.Logger            as L
-import           Network.HTTP.Req           (GET (GET), LbsResponse,
-                                             NoReqBody (NoReqBody), POST (POST),
-                                             QueryParam,
-                                             ReqBodyJson (ReqBodyJson),
-                                             defaultHttpConfig, https,
-                                             lbsResponse, req, responseBody,
-                                             responseStatusCode,
-                                             responseStatusMessage, runReq,
-                                             (/:), (=:))
+import           Network.HTTP.Req
 import           System.Exit                (exitFailure)
 
 parseResponse :: (FromJSON response, MonadThrow m, Show response) => L.Handle m -> B.ByteString -> m response
@@ -37,7 +29,7 @@ parseResponse hLogger respBody = case eitherDecode respBody of
 makeRequest :: (ToJSON a, MonadIO m, MonadCatch m) =>
     L.Handle m -> Maybe a -> Text -> [Text] -> [(Text, Text)] -> m B.ByteString
 makeRequest hLogger maybeBody url methods params = do
-    resp <- handleWeb hLogger targetUrl $ sendRequestReq maybeBody url methods params
+    resp <- sendRequestReq maybeBody url methods params
     L.debug hLogger $
         ("Got response from " <> unpack targetUrl <>
         "\n\tCode: " <> show (resp & responseStatusCode) <>
@@ -45,27 +37,6 @@ makeRequest hLogger maybeBody url methods params = do
         "\n\tBody: ") <> BC.unpack (resp & responseBody)
     return (resp & responseBody)
     where targetUrl = url <> "/" <> intercalate "/" methods <> "?" <> (intercalate "&" . map (\(k, v) -> k <> "=" <> v) $ params)
-
-handleWeb :: (MonadIO m, MonadCatch m) => L.Handle m -> Text -> m a -> m a
-handleWeb hL targetUrl m =
-    handle (\e -> case fromException e of
-    Just (CodeMessageException code _) -> do
-        if code == 429 then do
-            L.error hL (unpack $ "Error occured while requesting to: " <> targetUrl)
-            L.error hL "To many requests, 25 seconds delay"
-            liftIO $ threadDelay 25000
-            m
-        else throwM . toException $ e
-    Just (ConnectionException t) -> do
-        L.error hL (unpack $ "Error occured while requesting to: " <> targetUrl)
-        L.error hL $ "Connection failure: " <> unpack t <> "\n 25 seconds delay"
-        liftIO $ threadDelay 25000
-        m
-    Just (InvalidUrlException url mes) -> do
-        L.error hL (unpack $ "Error occured while requesting to: " <> targetUrl)
-        L.error hL $ "Invalid url: " <> unpack url <> "\n message: " <> unpack mes
-        liftIO exitFailure
-    Nothing -> throwM e) m
 
 -- | Function to make requests using Network.HTTP.Req library
 --

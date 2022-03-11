@@ -1,7 +1,4 @@
 module Config
-    -- ( AppConfig (..),
-    --   Messenger(..),
-    --   fetchConfig)
     where
 
 import           Conferer                       (DefaultConfig (..), FromConfig,
