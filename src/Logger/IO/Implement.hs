@@ -7,18 +7,16 @@ module Logger.IO.Implement (
 
 
 import           Config
-import           Control.Monad              (when)
-import           Control.Monad.Catch        (MonadMask, bracket)
-import           Control.Monad.IO.Class     (MonadIO (liftIO))
-import qualified Data.ByteString.Lazy.Char8 as B (hPutStrLn, putStrLn)
-import           Data.Function              ((&))
-import           Data.Maybe                 (fromJust, isJust)
-import           Data.Text                  (Text, pack)
-import           Data.Text.IO               as T (appendFile, hPutStrLn,
-                                                  putStrLn)
-import qualified Handlers.Logger            as L
-import           Prelude                    hiding (error, log)
-import qualified System.IO                  as SIO
+import           Control.Monad          (when)
+import           Control.Monad.Catch    (MonadMask, bracket)
+import           Control.Monad.IO.Class (MonadIO (liftIO))
+import           Data.Function          ((&))
+import           Data.Maybe             (fromJust, isJust)
+import           Data.Text              (Text, pack)
+import           Data.Text.IO           as T (hPutStrLn, putStrLn)
+import qualified Handlers.Logger        as L
+import           Prelude                hiding (error, log)
+import qualified System.IO              as SIO
 
 data Config = Config {
       cFilePath  :: Maybe FilePath
