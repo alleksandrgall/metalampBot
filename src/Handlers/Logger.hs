@@ -12,7 +12,6 @@ import           Data.Function ((&))
 import           Data.Text     (Text, pack)
 import           Prelude       hiding (error, log)
 
-
 data LogLevel = Debug | Info | Warning | Error deriving (Show, Eq, Ord)
 
 data Handle m = Handle

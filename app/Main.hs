@@ -1,4 +1,3 @@
-
 module Main where
 import qualified Bot.Telegram    as TG
 import qualified Bot.VK          as VK
@@ -12,7 +11,6 @@ import qualified Logger.IO       as Lio
 
 main :: IO ()
 main = do
-  -- print =<< (eitherDecodeFileStrict "temp/VKCallback.json" :: IO (Either String (CallbackQuery VKUserInfo)))
   appConfig <- fetchConfig
   Lio.withHandle (Lio.parseConfig appConfig) $ \l -> do
     when ((appConfig & appConfigToken) == "") $ L.warning l "Access token must be specified for correct behavior"
