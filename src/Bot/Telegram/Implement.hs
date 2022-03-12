@@ -9,8 +9,7 @@ import           Data.Aeson             (ToJSON)
 import qualified Data.ByteString.Lazy   as BS
 import           Data.Function          ((&))
 import qualified Data.HashMap.Lazy      as HM
-import           Data.IORef             (modifyIORef', newIORef, readIORef,
-                                         writeIORef)
+import           Data.IORef
 import           Data.Int               (Int64)
 import           Data.String            (IsString (fromString))
 import           Data.Text              (Text, pack)
@@ -41,10 +40,10 @@ data Config = Config {
 }
 
 withHandle :: (MonadCatch m, MonadIO m) =>
-    Config -> L.Handle m -> (B.Handle TelegramGettable TelegramUserInfo m -> m a) -> m a
+    Config -> L.Handle m -> (B.Handle TGGettable TGUserInfo m -> m a) -> m a
 withHandle Config {..} hL f = do
     offset <- liftIO $ newIORef 0
-    userRepeat <- liftIO $ newIORef (mempty :: HM.HashMap TelegramUserInfo Int)
+    userRepeat <- liftIO $ newIORef (mempty :: HM.HashMap TGUserInfo Int)
     let h = B.Handle {
           hConfig           = B.Config cBaseRepeat cStartMes cHelpMes cRepeatMes cRepeatKeyboardMes
         , hLogger           = hL
@@ -74,21 +73,21 @@ init token hL = void $ request token hL (Just $ Commands
          ("/start" , "Use to see a start message")])
          "setMyCommands" []
 
-getUpdates :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> Int64 -> m (Maybe Int64, [TelegramUpdate])
+getUpdates :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> Int64 -> m (Maybe Int64, [TGUpdate])
 getUpdates token hL offset = do
-    TelegramResult idUpds <- parseResponse hL =<< request token hL (Nothing :: Maybe String) "getUpdates"
+    TGResult idUpds <- parseResponse hL =<< request token hL (Nothing :: Maybe String) "getUpdates"
      [("offset", pack . show $ offset),
      ("timeout", "2")]
-    let (lastUId, upds) = foldr (\TelegramUpdateWithId{..} (curMax, res) ->
-            if curMax < Just uId then (Just uId, uCont:res) else (curMax, uCont:res)) (Nothing, []) (idUpds :: [TelegramUpdateWithId])
+    let (lastUId, upds) = foldr (\TGUpdateWithId{..} (curMax, res) ->
+            if curMax < Just uId then (Just uId, uCont:res) else (curMax, uCont:res)) (Nothing, []) (idUpds :: [TGUpdateWithId])
     return ((+1) <$> lastUId, upds)
 
-sendMes :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> TelegramMessageSend -> m ()
+sendMes :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> TGMessageSend -> m ()
 sendMes token hL tgMes = case tgMes & B.msContent of
     B.CGettable (GSticker _) -> void $ request token hL (Just tgMes) "sendSticker" []
     _   -> void $ request token hL (Just tgMes) "sendMessage" []
 
-ansCb :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> Text -> B.CallbackQuery TelegramUserInfo -> m ()
+ansCb :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> Text -> B.CallbackQuery TGUserInfo -> m ()
 ansCb token hL cbMes B.CallbackQuery {..} = void $ request token hL (Nothing :: Maybe String) "answerCallbackQuery"
     [("callback_query_id", pack cbId),
      ("text", cbMes)]
