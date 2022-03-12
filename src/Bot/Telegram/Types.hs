@@ -1,12 +1,12 @@
 {-# LANGUAGE FlexibleInstances #-}
 module Bot.Telegram.Types
-    ( TelegramUpdate,
-      TelegramUserInfo,
-      TelegramUpdateWithId(..),
-      TelegramMessageSend,
-      TelegramMessageGet,
-      TelegramGettable(..),
-      TelegramResult(..),
+    ( TGUpdate,
+      TGUserInfo,
+      TGUpdateWithId(..),
+      TGMessageSend,
+      TGMessageGet,
+      TGGettable(..),
+      TGResult(..),
       Commands(..))
 where
 
@@ -36,61 +36,61 @@ instance ToJSON Commands where
 
 
 -- | Type for telegram user info and instances
-data TelegramUserInfo = TelegramUserInfo {
+data TGUserInfo = TGUserInfo {
     uiId     :: Int64,
     uiChatId :: Int64
 } deriving (Generic, Eq, Ord)
-instance Show TelegramUserInfo where
-    show TelegramUserInfo {..} = "user_id: " <> show uiId <> ", chat_id: " <> show uiChatId
-instance Hashable TelegramUserInfo
+instance Show TGUserInfo where
+    show TGUserInfo {..} = "user_id: " <> show uiId <> ", chat_id: " <> show uiChatId
+instance Hashable TGUserInfo
 
-instance FromJSON TelegramUserInfo where
-    parseJSON (Object o) = TelegramUserInfo <$> (o .: "from" >>= (.: "id")) <*> (o .: "chat" >>= (.: "id"))
+instance FromJSON TGUserInfo where
+    parseJSON (Object o) = TGUserInfo <$> (o .: "from" >>= (.: "id")) <*> (o .: "chat" >>= (.: "id"))
     parseJSON _ = mempty
 
 -- | Type for telegram response
-newtype TelegramResult a = TelegramResult a deriving Show
-instance (FromJSON a) => FromJSON (TelegramResult a) where
-    parseJSON (Object o) = TelegramResult <$> o .: "result"
+newtype TGResult a = TGResult a deriving Show
+instance (FromJSON a) => FromJSON (TGResult a) where
+    parseJSON (Object o) = TGResult <$> o .: "result"
     parseJSON _          = mempty
 
 -- | Type for telegram gettable content
-data TelegramGettable = GText String (Maybe [Entity]) | GSticker String
+data TGGettable = GText String (Maybe [Entity]) | GSticker String
     deriving (Show, Eq)
-instance IsString TelegramGettable where
+instance IsString TGGettable where
     fromString s = GText s Nothing
 
 -- | Type and instance for telegram keyboard
-data TelegramKeyboard = TelegramKeyboard
+data TGKeyboard = TGKeyboard
 keyboardLayout :: [Text]
 keyboardLayout = ["1", "2", "3", "4", "5"]
 
-instance ToJSON TelegramKeyboard where
+instance ToJSON TGKeyboard where
     toJSON _ = object
         ["inline_keyboard" .=
             [map (\name -> object [("text", String name), ("callback_data", String name)]) keyboardLayout]]
 
 -- | Types for telegram messages and Aeson instances
-type TelegramMessageSend = MessageSend TelegramGettable TelegramUserInfo
-instance ToJSON TelegramMessageSend where
-    toJSON (MessageSend TelegramUserInfo {..} (CGettable (GText t ents))) = object [
+type TGMessageSend = MessageSend TGGettable TGUserInfo
+instance ToJSON TGMessageSend where
+    toJSON (MessageSend TGUserInfo {..} (CGettable (GText t ents))) = object [
           "chat_id" .= uiChatId
         , "text" .= t
         , "entities" .= ents
         ]
-    toJSON (MessageSend TelegramUserInfo {..} (CGettable (GSticker sId))) = object [
+    toJSON (MessageSend TGUserInfo {..} (CGettable (GSticker sId))) = object [
            "chat_id" .= uiChatId
          , "sticker" .= sId
         ]
-    toJSON (MessageSend TelegramUserInfo {..} (CKeyboard t )) = object [
+    toJSON (MessageSend TGUserInfo {..} (CKeyboard t )) = object [
           "chat_id"  .= uiChatId
         , "text"     .= t
-        , "reply_markup" .= TelegramKeyboard
+        , "reply_markup" .= TGKeyboard
         ]
 
 
-type TelegramMessageGet = MessageGet TelegramGettable TelegramUserInfo
-instance FromJSON TelegramMessageGet where
+type TGMessageGet = MessageGet TGGettable TGUserInfo
+instance FromJSON TGMessageGet where
     parseJSON (Object o) = MessageGet <$>
         parseJSON (Object o) <*>
         ((GSticker <$> (o .: "sticker" >>= (.: "file_id")))
@@ -99,9 +99,9 @@ instance FromJSON TelegramMessageGet where
     parseJSON _ = mempty
 
 -- | Aeson instances for telegram CallbackQuery
-instance FromJSON (CallbackQuery TelegramUserInfo) where
+instance FromJSON (CallbackQuery TGUserInfo) where
     parseJSON (Object o) = CallbackQuery <$>
-        (TelegramUserInfo <$> (o .: "from" >>= (.: "id")) <*>
+        (TGUserInfo <$> (o .: "from" >>= (.: "id")) <*>
         (o .: "message" >>= (.: "chat") >>= (.: "id"))) <*>
         o .: "id" <*>
         o .: "data"
@@ -117,7 +117,7 @@ commandFromString c ui = case map toLower c of
     "/start"  -> Just $ Command ui Start
     _         -> Nothing
 
-instance FromJSON (Command TelegramUserInfo) where
+instance FromJSON (Command TGUserInfo) where
     parseJSON (Object o) = do
         ui   <- parseJSON (Object o)
         txt  <- (o .: "text" :: Parser String)
@@ -136,13 +136,13 @@ instance FromJSON (Command TelegramUserInfo) where
 
 -- | Type and Aeson instances for telegram updates
 -- Order of parsers for Update constructors matter, command parser should be the first one
-type TelegramUpdate = Update TelegramGettable TelegramUserInfo
-data TelegramUpdateWithId = TelegramUpdateWithId {
+type TGUpdate = Update TGGettable TGUserInfo
+data TGUpdateWithId = TGUpdateWithId {
       uId   :: Int64
-    , uCont :: TelegramUpdate
+    , uCont :: TGUpdate
 } deriving (Show, Eq)
 
-instance FromJSON TelegramUpdate where
+instance FromJSON TGUpdate where
     parseJSON (Object o) =
         (o .: "message" >>= \m -> UCommand <$> parseJSON m <|> UMessage <$> parseJSON m)
         <|>
@@ -151,8 +151,8 @@ instance FromJSON TelegramUpdate where
         pure UnknownUpdate
     parseJSON _ = mempty
 
-instance FromJSON TelegramUpdateWithId where
-    parseJSON (Object o) = TelegramUpdateWithId <$> o .: "update_id" <*> parseJSON (Object o)
+instance FromJSON TGUpdateWithId where
+    parseJSON (Object o) = TGUpdateWithId <$> o .: "update_id" <*> parseJSON (Object o)
     parseJSON _ = mempty
 --
 data Entity = Entity {

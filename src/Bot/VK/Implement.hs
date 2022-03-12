@@ -11,8 +11,7 @@ import qualified Data.ByteString.Lazy.Char8   as CBS (unpack)
 import           Data.Coerce                  (coerce)
 import           Data.Function                ((&))
 import qualified Data.HashMap.Internal.Strict as HM (HashMap, insert, lookup)
-import           Data.IORef                   (IORef, modifyIORef', newIORef,
-                                               readIORef, writeIORef)
+import           Data.IORef
 import           Data.Int                     (Int64)
 import           Data.String                  (IsString (fromString))
 import           Data.Text                    (Text, pack)
