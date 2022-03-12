@@ -31,7 +31,6 @@ instance FromJSON GetLongPollAnswer where
   parseJSON (Object o) = o .: "response" >>= genericParseJSON defaultOptions
   parseJSON _          = mempty
 
-
 -- | Type for VK result of getUpdate
 data VKUpdateResult = VKUpdateResult {
     newTs   :: Int64,
@@ -109,7 +108,6 @@ instance FromJSON (Command VKUserInfo) where
                     GText txt -> maybe mempty pure (commandFromString txt mgUserInfo)
                     _         -> mempty
     parseJSON _ = mempty
-
 
 -- | Instance for vk callback query
 -- | Due to incorrect api behavior payload in callback returns as an int, therefore it should be converted to string first

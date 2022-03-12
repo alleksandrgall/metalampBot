@@ -37,4 +37,3 @@ handleWeb hL descr def =
         L.error hL $ "Invalid url: " <> unpack url <> "\n message: " <> unpack mes
         liftIO exitFailure
     Nothing -> throwM e
-

@@ -35,6 +35,3 @@ debug h = log h Debug
 info h = log h Info
 warning h = log h Warning
 error h = log h Error
-
-
-

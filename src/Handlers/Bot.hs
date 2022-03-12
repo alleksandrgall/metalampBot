@@ -1,21 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 module Handlers.Bot
-  (Config(..)
-  ,Handle(..)
-  ,runBot
-  ,processUpdates
-  ,processCallback
-  ,processCommand
-  ,processMessage
-  ,MessageGet(..)
-  ,MessageSend(..)
-  ,SendContent(..)
-  ,Command(..)
-  ,CommandType(..)
-  ,Update(..)
-  ,CallbackQuery(..)
-  ) where
+  where
 
 import           Control.Monad   (forever, replicateM_, unless)
 import           Data.Foldable   (traverse_)

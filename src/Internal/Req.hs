@@ -39,7 +39,6 @@ makeRequest hLogger maybeBody url methods params = do
     where targetUrl = url <> "/" <> intercalate "/" methods <> "?" <> (intercalate "&" . map (\(k, v) -> k <> "=" <> v) $ params)
 
 -- | Function to make requests using Network.HTTP.Req library
---
 -- | Can throw Exceptions from Network.HTTP.Client
 sendRequestReq :: (MonadIO m, ToJSON b) =>
     Maybe b -> -- | possible request body

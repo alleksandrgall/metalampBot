@@ -34,7 +34,6 @@ newtype Commands = Commands [(Text, Text)] deriving Generic
 instance ToJSON Commands where
     toJSON (Commands ls) = object ["commands" .= Array (fromList (map (\(c, d) -> object ["command" .= c, "description" .= d]) ls))]
 
-
 -- | Type for telegram user info and instances
 data TGUserInfo = TGUserInfo {
     uiId     :: Int64,
