@@ -42,36 +42,30 @@ data Config = Config {
 withHandle :: (MonadCatch m, MonadIO m) =>
     Config -> L.Handle m -> (B.Handle TGGettable TGUserInfo m -> m a) -> m a
 withHandle Config {..} hL f = do
-    offset <- liftIO $ newIORef 0
-    userRepeat <- liftIO $ newIORef (mempty :: HM.HashMap TGUserInfo Int)
     let h = B.Handle {
           hConfig           = B.Config cBaseRepeat cStartMes cHelpMes cRepeatMes cRepeatKeyboardMes
         , hLogger           = hL
-        , hInit             = handleWeb hL "initializing bot" () $ init cToken hL
+        , hInit             = handleWeb hL "initializing bot" 0 $ init cToken hL
         , hGetUpdates       = handleWeb hL "getting updates" (Nothing, []) . getUpdates cToken hL
         , hSendMes          = handleWeb hL "sending message" () . sendMes cToken hL
         , hAnswerCallback   = \t cb -> handleWeb hL "answering callback" () $ ansCb cToken hL t cb
-        , hGetOffset        = getOffset offset
-        , hSetOffset        = setOffset offset
-        , hInsertUserRepeat = insertUserRepeat userRepeat
-        , hGetUserRepeat    = getUserRepeat userRepeat
     }
     f h
     where
-        getOffset ref = liftIO $ readIORef ref
-        setOffset ref offset = liftIO $ writeIORef ref offset
         getUserRepeat ref ui = fmap (HM.lookup ui) (liftIO . readIORef $ ref)
         insertUserRepeat ref ui r = liftIO $ modifyIORef' ref (HM.insert ui r)
 
 request :: (MonadCatch m, MonadIO m, ToJSON b) => String -> L.Handle m -> Maybe b -> Text -> [(Text, Text)] -> m BS.ByteString
 request token hL body method = makeRequest hL body "api.telegram.org" ["bot" <> fromString token, method]
 
-init :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> m ()
-init token hL = void $ request token hL (Just $ Commands
+init :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> m Int64
+init token hL = do
+    void $ request token hL (Just $ Commands
         [("/repeat", "Use to change the repeat number."),
          ("/help"  , "Use to get help."),
          ("/start" , "Use to see a start message")])
          "setMyCommands" []
+    return 0
 
 getUpdates :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> Int64 -> m (Maybe Int64, [TGUpdate])
 getUpdates token hL offset = do
