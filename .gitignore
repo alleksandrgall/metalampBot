@@ -26,3 +26,4 @@ cabal.project.local~
 .history
 config/development.properties
 temp/
+config/bot.properties
