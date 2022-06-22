@@ -10,8 +10,8 @@ import Conferer.FromConfig
   ( FromConfig (fromConfig),
     fetchFromConfigWith,
   )
-import Conferer.Source.CLIArgs as CLI
-import Conferer.Source.PropertiesFile as Prop
+import qualified Conferer.Source.CLIArgs as CLI
+import qualified Conferer.Source.PropertiesFile as Prop
 import Data.Text (Text, toLower)
 import GHC.Generics (Generic)
 import Handlers.Logger (LogLevel (..))
@@ -76,7 +76,8 @@ data Logger = Logger
 instance FromConfig Logger
 
 data AppConfig = AppConfig
-  { appConfigToken :: String,
+  { appConfigTeleToken :: String,
+    appConfigVkToken :: String,
     appConfigMessenger :: Messenger,
     appConfigStart :: Start,
     appConfigRepeat :: Repeat,
@@ -91,7 +92,8 @@ instance FromConfig AppConfig
 instance DefaultConfig AppConfig where
   configDef =
     AppConfig
-      { appConfigToken = "",
+      { appConfigTeleToken = "",
+        appConfigVkToken = "",
         appConfigMessenger = Tele,
         appConfigStart =
           Start
