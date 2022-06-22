@@ -9,7 +9,7 @@ import Data.Aeson (ToJSON)
 import qualified Data.ByteString.Lazy as BS
 import Data.Function ((&))
 import qualified Data.HashMap.Lazy as HM
-import Data.IORef (modifyIORef', readIORef)
+import Data.IORef
 import Data.Int (Int64)
 import Data.String (IsString (fromString))
 import Data.Text (Text, pack)

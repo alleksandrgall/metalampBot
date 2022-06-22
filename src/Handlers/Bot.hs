@@ -1,15 +1,15 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE RankNTypes #-}
 
 module Handlers.Bot where
 
 import Control.Monad (foldM, forever, replicateM_, unless)
+import Data.Bifunctor (first)
 import Data.Foldable (traverse_)
 import Data.Function ((&))
 import qualified Data.HashMap.Strict as HM
 import Data.Hashable (Hashable)
 import Data.Int (Int64)
-import Data.Maybe (fromJust, isNothing)
 import Data.String (IsString (..))
 import Data.Text (Text, unpack)
 import qualified Handlers.Logger as L
@@ -94,11 +94,12 @@ runBot h@Handle {..} = do
 
 botLoop :: (IsString gettable) => Handle gettable usInf m -> Int64 -> HM.HashMap usInf Int -> m ()
 botLoop h@Handle {..} offset userRepeats = do
-  (newOffset, uls) <- hGetUpdates offset
-  unless (isNothing newOffset) $ do
-    newUserRepeats <- processUpdates h userRepeats uls
-    botLoop h (fromJust newOffset) newUserRepeats
-  botLoop h offset userRepeats
+  (maybeOffset, uls) <- hGetUpdates offset
+  case maybeOffset of
+    Nothing -> botLoop h offset userRepeats
+    Just newOffset -> do
+      newUserRepeats <- processUpdates h userRepeats uls
+      botLoop h newOffset newUserRepeats
 
 processUpdates ::
   (IsString gettable) =>
@@ -118,25 +119,33 @@ processUpdates h@Handle {..} userRepeats uls = do
       UMessage m -> processMessage h m userRepeats >> return userRepeats
       UnknownUpdate -> L.info hLogger "Got an unknown update." >> return userRepeats
 
+newtype RepeatNum = RepeatNum Int deriving (Enum, Eq, Ord, Num, Real, Integral)
+
+instance Show RepeatNum where
+  show (RepeatNum x) = show x
+
+instance Read RepeatNum where
+  readsPrec n s =
+    let readInt = readsPrec n s :: [(Int, String)]
+     in map (first RepeatNum) $ filter ((`elem` [1 .. 5]) . fst) readInt
+
 processCallback :: Handle gettable usInf m -> CallbackQuery usInf -> HM.HashMap usInf Int -> m (HM.HashMap usInf Int)
 processCallback Handle {..} cb@CallbackQuery {..} userRepeats = do
   L.info hLogger ("Processing callback from the " <> show cbUserInfo <> "...")
-  let maybeNewRepeat = readMaybe cbData
-      testNewRepeat = (`elem` [1 .. 5]) <$> maybeNewRepeat
-  if testNewRepeat == Just True
-    then do
-      let newRepeat = fromJust maybeNewRepeat
+  let maybeNewRepeat = readMaybe cbData :: Maybe RepeatNum
+  case maybeNewRepeat of
+    Nothing ->
+      L.warning hLogger ("Bad callback data from the " <> show cbUserInfo <> ", data: " <> fromString cbData)
+        >> return userRepeats
+    Just newRepeatNum -> do
       hAnswerCallback (hConfig & cRepeatMes) cb
       L.info
         hLogger
         ( "Repeat number of the " <> show cbUserInfo <> " was adjusted and answer was send to the user\n\t"
             <> "New number: "
-            <> show newRepeat
+            <> show newRepeatNum
         )
-      return $ HM.insert cbUserInfo newRepeat userRepeats
-    else
-      L.warning hLogger ("Bad callback data from the " <> show cbUserInfo <> ", data: " <> fromString cbData)
-        >> return userRepeats
+      return $ HM.insert cbUserInfo (fromIntegral newRepeatNum) userRepeats
 
 processCommand :: (IsString gettable) => Handle gettable usInf m -> Command usInf -> m ()
 processCommand Handle {..} Command {..} = do

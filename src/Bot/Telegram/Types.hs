@@ -192,10 +192,10 @@ data Entity = Entity
   deriving (Show, Generic, Eq)
 
 instance ToJSON Entity where
-  toJSON = genericToJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "e"}
+  toJSON = genericToJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . drop 1}
 
 instance FromJSON Entity where
-  parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "e"}
+  parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . drop 1}
 
 data EntityUser = EntityUser
   { euId :: Int64,
@@ -205,7 +205,7 @@ data EntityUser = EntityUser
   deriving (Show, Generic, Eq)
 
 instance ToJSON EntityUser where
-  toEncoding = genericToEncoding defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "eu"}
+  toEncoding = genericToEncoding defaultOptions {fieldLabelModifier = camelTo2 '_' . drop 2}
 
 instance FromJSON EntityUser where
-  parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . fromJust . stripPrefix "eu"}
+  parseJSON = genericParseJSON defaultOptions {fieldLabelModifier = camelTo2 '_' . drop 2}

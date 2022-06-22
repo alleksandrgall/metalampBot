@@ -12,7 +12,6 @@ import Data.HashMap.Internal.Strict (HashMap, insert, lookup)
 import qualified Data.HashMap.Strict as HM
 import Data.Hashable (Hashable)
 import Data.Int (Int64)
-import Data.Maybe (fromJust)
 import Data.String (IsString (..), String)
 import Data.Text (Text, pack, unpack)
 import GHC.Exts (IsList (fromList))
@@ -147,7 +146,7 @@ processMessage = hspec $ do
       property $ \targetUser tuRepeat userRepeatList ->
         let userRepeats = HM.insert targetUser tuRepeat $ fromList userRepeatList
             sending = B.processMessage mockHandle (B.MessageGet targetUser "Hello") userRepeats
-            shouldBeSend = replicate (fromJust $ HM.lookup targetUser userRepeats) (Message targetUser (B.CGettable "Hello"))
+            shouldBeSend = replicate tuRepeat (Message targetUser (B.CGettable "Hello"))
          in run sending `shouldSatisfy` (\(_, send) -> send == shouldBeSend)
 
     it "if user's number of repeats has not been set sends message as many times as the default number of repeats (cBaseRepeat)" $ do

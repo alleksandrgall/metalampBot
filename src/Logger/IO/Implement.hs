@@ -10,7 +10,6 @@ import Control.Monad (when)
 import Control.Monad.Catch (MonadMask, bracket)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Data.Function ((&))
-import Data.Maybe (fromJust, isJust)
 import Data.Text (Text, pack)
 import Data.Text.IO as T (hPutStrLn, putStrLn)
 import qualified Handlers.Logger as L
@@ -34,10 +33,11 @@ parseConfig AppConfig {..} =
 -- | Handle takes maybe file to write to, whether to write to console or not and loglevel
 withHandle :: (MonadIO m, MonadMask m) => Config -> (L.Handle m -> m a) -> m a
 withHandle c f = do
-  if isJust $ c & cFilePath
-    then
+  case c & cFilePath of
+    Nothing -> f $ L.Handle (L.Config $ c & cLogLevel) (\l t -> liftIO $ when (c & cToConsole) (printMsg l t))
+    Just fp ->
       bracket
-        (liftIO $ SIO.openFile (fromJust $ c & cFilePath) SIO.AppendMode)
+        (liftIO $ SIO.openFile fp SIO.AppendMode)
         (liftIO . SIO.hClose)
         ( \h ->
             f $
@@ -48,7 +48,6 @@ withHandle c f = do
                     SIO.hIsWritable h >>= flip when (writeFileMsg l t h)
                 )
         )
-    else f $ L.Handle (L.Config $ c & cLogLevel) (\l t -> liftIO $ when (c & cToConsole) (printMsg l t))
   where
     msg l t = (pack . show $ l) <> ": " <> t
     printMsg :: L.LogLevel -> Text -> IO ()
