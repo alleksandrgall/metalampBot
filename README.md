@@ -4,10 +4,12 @@ Echo chat bot creatred as requested by MetaLamp. Implemented for TG and VK.
 1. Download and install `stack` as described [here](https://docs.haskellstack.org/en/stable/install_and_upgrade/).
 2. Clone this repository as described [here](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) or with `git clone https://github.com/alleksandrgall/metalampBot` command if you have `git` installed.
 3. To run app you need your own Telegram bot token, which you can get [here](https://telegram.me/BotFather) and/or VK access token and group id, details on setting up you VK group with chat bot can be found [here](https://dev.vk.com/api/bots/getting-started).
-4. After you got those replace field `token` in `config/bot.properties`. Other possible configurations are described there.
-5. `stack setup` for downloading compiler, 
+4. Rename `config/config_template.properties` to `config/bot.properties`, that will be an actuall config where the programm will read from.
+   In `config/config_template.properties` you can also find information about additional configurations.
+5. Place information you got on step (3) in corresponding fields in `config/bot.properties`.
+6. `stack setup` for downloading compiler, 
    `stack build` for building app and downloading dependencies.
-6. `stack exec metaLampBot-exe` for running your bot.
+7. `stack exec metaLampBot-exe` for running your bot.
 
 You can run tests of logic with `stack test`.
 
