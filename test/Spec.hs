@@ -1,10 +1,10 @@
 module Spec where
 
-import           Bot
+import Bot
 
 main :: IO ()
 main = do
-    processCallback
-    processCommand
-    processMessage
-    processUpdates
+  processCallback
+  processCommand
+  processMessage
+  processUpdates
