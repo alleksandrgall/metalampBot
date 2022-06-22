@@ -24,4 +24,9 @@ main = do
       Tele -> do
         L.info l "Launching Telegram bot..."
         TG.withHandle (TG.parseConfig appConfig) l $ \bot ->
+<<<<<<< HEAD
           runBot bot
+=======
+            runBot bot
+
+>>>>>>> 63ee26cf46572e9d8c01010e288ada9d1dc373c3
