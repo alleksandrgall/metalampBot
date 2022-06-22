@@ -7,7 +7,7 @@ Echo chat bot creatred as requested by MetaLamp. Implemented for TG and VK.
 4. After you got those replace field `token` in `config/bot.properties`. Other possible configurations are described there.
 5. `stack setup` for downloading compiler, 
    `stack build` for building app and downloading dependencies.
-6. `stack exec metaLampBot` for running your bot.
+6. `stack exec metaLampBot-exe` for running your bot.
 
 You can run tests of logic with `stack test`.
 
