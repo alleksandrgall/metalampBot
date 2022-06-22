@@ -25,6 +25,8 @@ dependencies:
 - req
 - http-client
 - aeson
+- filepath
+- directory
 - containers
 - unordered-containers
 - exceptions >= 0.10.4
