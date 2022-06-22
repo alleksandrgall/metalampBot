@@ -1,13 +1,13 @@
 module Main where
-import qualified Bot.Telegram    as TG
-import qualified Bot.VK          as VK
-import           Config
-import           Control.Monad   (when)
-import           Data.Function   ((&))
-import           Handlers.Bot    (runBot)
-import qualified Handlers.Logger as L
-import qualified Logger.IO       as Lio
 
+import qualified Bot.Telegram as TG
+import qualified Bot.VK as VK
+import Config
+import Control.Monad (when)
+import Data.Function ((&))
+import Handlers.Bot (runBot)
+import qualified Handlers.Logger as L
+import qualified Logger.IO as Lio
 
 main :: IO ()
 main = do
@@ -24,5 +24,4 @@ main = do
       Tele -> do
         L.info l "Launching Telegram bot..."
         TG.withHandle (TG.parseConfig appConfig) l $ \bot ->
-            runBot bot
-
+          runBot bot
