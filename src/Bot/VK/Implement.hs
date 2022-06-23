@@ -73,6 +73,17 @@ vkRequest token hL method params =
 
 init :: (MonadCatch m, MonadIO m) => IORef String -> IORef String -> String -> Int -> L.Handle m -> m Int64
 init keyR serverR token groupId hL = do
+  L.info hL "Setting up the group..."
+  vkRequest
+    token
+    hL
+    "groups.setLongPollSettings"
+    [ ("group_id", fromString . show $ groupId),
+      ("enabled", "1"),
+      ("message_event", "1"),
+      ("message_new", "1")
+    ]
+  L.info hL "Intitializing LongPoll session..."
   res <- vkRequest token hL "groups.getLongPollServer" [("group_id", fromString . show $ groupId)]
   initInfo <- parseResponse hL res
   liftIO $ writeIORef serverR (getServerPath . server $ initInfo)
