@@ -29,7 +29,7 @@ parseConfig AppConfig {..} =
       cHelpMes = appConfigHelp & helpMessage,
       cRepeatMes = appConfigRepeat & repeatMessage,
       cRepeatKeyboardMes = appConfigRepeat & repeatKeyboardMes,
-      cToken = appConfigToken
+      cToken = appConfigTeleToken
     }
 
 data Config = Config

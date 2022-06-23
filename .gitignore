@@ -27,3 +27,4 @@ cabal.project.local~
 config/development.properties
 temp/
 *.log
+config/bot.properties

@@ -30,7 +30,7 @@ parseConfig AppConfig {..} =
       cHelpMes = appConfigHelp & helpMessage,
       cRepeatMes = appConfigRepeat & repeatMessage,
       cRepeatKeyboardMes = appConfigRepeat & repeatKeyboardMes,
-      cToken = appConfigToken,
+      cToken = appConfigVkToken,
       cGroupId = coerce appConfigGroupId
     }
 
