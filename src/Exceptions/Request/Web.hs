@@ -2,10 +2,9 @@
 
 module Exceptions.Request.Web (WebException (..)) where
 
-import Control.Exception (Exception, SomeException)
+import Control.Exception (Exception)
 import Control.Monad.Catch
   ( Exception (fromException),
-    MonadThrow (throwM),
   )
 import Data.Function
 import Data.Text (Text, pack)
@@ -30,7 +29,7 @@ instance Exception WebException where
         (StatusCodeException rs _) -> Just (CodeMessageException (respStatusCode rs) (respStatusMessage rs))
         ConnectionFailure e -> Just $ ConnectionException . pack . show $ e
         ConnectionTimeout -> Just $ ConnectionException mempty
-        other -> Nothing
+        _ -> Nothing
       VanillaHttpException (Http.InvalidUrlException url msg) -> Just $ Exceptions.Request.Web.InvalidUrlException (pack url) $ pack msg
       _ -> Nothing
     | otherwise = Nothing

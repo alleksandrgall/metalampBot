@@ -10,15 +10,15 @@ import qualified Data.ByteString.Lazy as BS (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as CBS (unpack)
 import Data.Coerce (coerce)
 import Data.Function ((&))
-import qualified Data.HashMap.Internal.Strict as HM (HashMap, insert, lookup)
+import Data.HashMap.Internal.Strict as HM (HashMap, insert, lookup)
 import Data.IORef
 import Data.Int (Int64)
-import Data.String (IsString (fromString))
-import Data.Text (Text, pack)
-import GHC.Generics (Generic)
+import Data.Text (Text, pack, unpack)
+import qualified Data.Text as T
 import qualified Handlers.Bot as B
 import qualified Handlers.Logger as L
 import Internal.Req (makeRequest, parseResponse)
+import Internal.ShowText (showText)
 import Internal.Utils (handleWeb)
 import Prelude hiding (init)
 
@@ -40,7 +40,7 @@ data Config = Config
     cHelpMes :: Text,
     cRepeatMes :: Text,
     cRepeatKeyboardMes :: Text,
-    cToken :: String,
+    cToken :: Text,
     cGroupId :: Int
   }
 
@@ -63,36 +63,34 @@ withHandle Config {..} hL f = do
             hAnswerCallback = \t cb -> handleWeb hL "answering callback" () $ ansCb cToken hL t cb
           }
   f h
-  where
-    getUserRepeat ref ui = fmap (HM.lookup ui) (liftIO . readIORef $ ref)
-    insertUserRepeat ref ui r = liftIO $ modifyIORef' ref (HM.insert ui r)
 
-vkRequest :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> Text -> [(Text, Text)] -> m BS.ByteString
+vkRequest :: (MonadCatch m, MonadIO m) => Text -> L.Handle m -> Text -> [(Text, Text)] -> m BS.ByteString
 vkRequest token hL method params =
-  makeRequest hL (Nothing :: Maybe String) "api.vk.com" ["method", method] (("v", "5.131") : ("access_token", fromString token) : params)
+  makeRequest hL (Nothing :: Maybe Text) "api.vk.com" ["method", method] (("v", "5.131") : ("access_token", token) : params)
 
-init :: (MonadCatch m, MonadIO m) => IORef String -> IORef String -> String -> Int -> L.Handle m -> m Int64
+init :: (MonadCatch m, MonadIO m) => IORef Text -> IORef Text -> Text -> Int -> L.Handle m -> m Int64
 init keyR serverR token groupId hL = do
   L.info hL "Setting up the group..."
-  vkRequest
-    token
-    hL
-    "groups.setLongPollSettings"
-    [ ("group_id", fromString . show $ groupId),
-      ("enabled", "1"),
-      ("message_event", "1"),
-      ("message_new", "1")
-    ]
+  void $
+    vkRequest
+      token
+      hL
+      "groups.setLongPollSettings"
+      [ ("group_id", showText groupId),
+        ("enabled", "1"),
+        ("message_event", "1"),
+        ("message_new", "1")
+      ]
   L.info hL "Intitializing LongPoll session..."
-  res <- vkRequest token hL "groups.getLongPollServer" [("group_id", fromString . show $ groupId)]
+  res <- vkRequest token hL "groups.getLongPollServer" [("group_id", showText groupId)]
   initInfo <- parseResponse hL res
   liftIO $ writeIORef serverR (getServerPath . server $ initInfo)
   liftIO $ writeIORef keyR (key initInfo)
-  return (read $ initInfo & ts)
+  return (read $ unpack $ initInfo & ts)
   where
-    getServerPath = reverse . takeWhile (/= '/') . reverse
+    getServerPath = T.reverse . T.takeWhile (/= '/') . T.reverse
 
-getUpdates :: (MonadCatch m, MonadIO m) => IORef String -> IORef String -> L.Handle m -> Int64 -> m (Maybe Int64, [VKUpdate])
+getUpdates :: (MonadCatch m, MonadIO m) => IORef Text -> IORef Text -> L.Handle m -> Int64 -> m (Maybe Int64, [VKUpdate])
 getUpdates keyR serverR hL offset = do
   server <- liftIO $ readIORef serverR
   key <- liftIO $ readIORef keyR
@@ -100,19 +98,19 @@ getUpdates keyR serverR hL offset = do
     parseResponse hL
       =<< makeRequest
         hL
-        (Nothing :: Maybe String)
+        (Nothing :: Maybe Text)
         "lp.vk.com"
-        [fromString server]
+        [server]
         [ ("act", "a_check"),
-          ("key", fromString key),
-          ("ts", fromString . show $ offset),
+          ("key", key),
+          ("ts", showText offset),
           ("wait", "20")
         ]
   if (updRes & newTs) == offset
     then return (Nothing, updRes & updates)
     else return (Just (updRes & newTs), updRes & updates)
 
-sendMes :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> VKMessageSend -> m ()
+sendMes :: (MonadCatch m, MonadIO m) => Text -> L.Handle m -> VKMessageSend -> m ()
 sendMes token hL B.MessageSend {..} =
   void $
     vkRequest token hL "messages.send" $
@@ -120,22 +118,22 @@ sendMes token hL B.MessageSend {..} =
   where
     buildUserInfo VKUserInfo {..} =
       if uiId == uiPeerId
-        then ("user_id", fromString . show $ uiId)
-        else ("chat_id", fromString . show $ (uiPeerId - 2000000000))
+        then ("user_id", showText uiId)
+        else ("chat_id", showText $ uiPeerId - 2000000000)
     messageInfo = case msContent of
-      B.CGettable (GText txt) -> [("message", fromString txt)]
-      B.CGettable (GSticker id_) -> [("sticker_id", fromString . show $ id_)]
+      B.CGettable (GText txt) -> [("message", txt)]
+      B.CGettable (GSticker id_) -> [("sticker_id", showText id_)]
       B.CKeyboard txt -> [("message", txt), ("keyboard", pack . CBS.unpack . encode $ VKKeyboard)]
 
-ansCb :: (MonadCatch m, MonadIO m) => String -> L.Handle m -> Text -> B.CallbackQuery VKUserInfo -> m ()
+ansCb :: (MonadCatch m, MonadIO m) => Text -> L.Handle m -> Text -> B.CallbackQuery VKUserInfo -> m ()
 ansCb token hL repeatMessage B.CallbackQuery {..} =
   void $
     vkRequest
       token
       hL
       "messages.sendMessageEventAnswer"
-      [ ("event_id", pack cbId),
-        ("user_id", pack . show $ cbUserInfo & uiId),
-        ("peer_id", pack . show $ cbUserInfo & uiPeerId),
+      [ ("event_id", cbId),
+        ("user_id", showText $ cbUserInfo & uiId),
+        ("peer_id", showText $ cbUserInfo & uiPeerId),
         ("event_data", pack . CBS.unpack . encode $ SnackBar repeatMessage)
       ]

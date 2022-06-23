@@ -13,12 +13,12 @@ module Bot.VK.Types
 where
 
 import Control.Applicative (Alternative ((<|>)))
-import Control.Monad (guard, when)
+import Control.Monad (guard)
 import Data.Aeson
 import Data.Aeson.Types (Parser)
 import Data.Hashable (Hashable)
 import Data.Int (Int64)
-import Data.Text (Text)
+import Data.Text (Text, pack)
 import GHC.Exts (IsList (toList), IsString (..))
 import GHC.Generics (Generic)
 import Handlers.Bot
@@ -33,9 +33,9 @@ import Internal.Utils (commandFromString)
 
 -- | Type for vk long poll server info used
 data GetLongPollAnswer = GetLongPollAnswer
-  { key :: String,
-    server :: String,
-    ts :: String
+  { key :: Text,
+    server :: Text,
+    ts :: Text
   }
   deriving (Show, Generic)
 
@@ -71,11 +71,11 @@ instance FromJSON VKUserInfo where
   parseJSON _ = mempty
 
 -- | Type and instances for gettable vk content
-data VKGettable = GText String | GSticker Int64
+data VKGettable = GText Text | GSticker Int64
   deriving (Show)
 
 instance IsString VKGettable where
-  fromString s = GText s
+  fromString s = GText (fromString s)
 
 instance FromJSON VKGettable where
   parseJSON (Object o) =
@@ -83,7 +83,7 @@ instance FromJSON VKGettable where
       <|> GText <$> (o .: "text")
     where
       findSticker = withObject "attachement" $ \at -> do
-        t <- (at .: "type" :: Parser String)
+        t <- (at .: "type" :: Parser Text)
         guard (t == "sticker")
         at .: "sticker" >>= (.: "sticker_id")
   parseJSON _ = mempty
@@ -98,7 +98,7 @@ instance FromJSON VKMessageGet where
 -- | Type and instance for vk keyboard
 data VKKeyboard = VKKeyboard
 
-keyboardLayout :: [String]
+keyboardLayout :: [Text]
 keyboardLayout = ["1", "2", "3", "4", "5"]
 
 instance ToJSON VKKeyboard where
@@ -111,7 +111,7 @@ instance ToJSON VKKeyboard where
                      object
                        [ "action"
                            .= object
-                             [ "type" .= ("callback" :: String),
+                             [ "type" .= ("callback" :: Text),
                                "label" .= b,
                                "payload" .= b
                              ]
@@ -125,12 +125,13 @@ instance ToJSON VKKeyboard where
 type VKMessageSend = MessageSend VKGettable VKUserInfo
 
 -- | Type for vk command
+startPayload :: Text
 startPayload = "{\"command\":\"start\"}"
 
 instance FromJSON (Command VKUserInfo) where
   parseJSON (Object o) = do
     parseJSON (Object o) >>= \MessageGet {..} -> do
-      p <- (o .:? "payload" :: Parser (Maybe String))
+      p <- (o .:? "payload" :: Parser (Maybe Text))
       if ((== startPayload) <$> p) == Just True
         then pure $ Command mgUserInfo Start
         else case mgContent of
@@ -139,11 +140,11 @@ instance FromJSON (Command VKUserInfo) where
   parseJSON _ = mempty
 
 -- | Instance for vk callback query
--- | Due to incorrect api behavior payload in callback returns as an int, therefore it should be converted to string first
-newtype Payload = Payload {unpayload :: String} deriving (Show)
+-- | Due to the incorrect api behavior payload in callback returns as an int, therefore it should be converted to text first
+newtype Payload = Payload {unpayload :: Text} deriving (Show)
 
 instance FromJSON Payload where
-  parseJSON (Object o) = Payload <$> (o .: "payload" >>= withScientific "Int payload" (return . show . round))
+  parseJSON (Object o) = Payload <$> (o .: "payload" >>= withScientific "Int payload" (return . pack . (show :: Int -> String) . round))
   parseJSON _ = mempty
 
 instance FromJSON (CallbackQuery VKUserInfo) where
@@ -156,14 +157,13 @@ type VKUpdate = Update VKGettable VKUserInfo
 instance FromJSON VKUpdate where
   parseJSON (Object o) =
     ( o .: "type" >>= \t ->
-        guard ((t :: String) == "message_new")
+        guard ((t :: Text) == "message_new")
           >> ( o .: "object" >>= (.: "message") >>= \m ->
-                 UCommand <$> parseJSON (Object m)
-                   <|> UMessage <$> parseJSON (Object m)
+                 UCommand <$> parseJSON (Object m) <|> UMessage <$> parseJSON (Object m)
              )
     )
       <|> ( o .: "type" >>= \t ->
-              guard ((t :: String) == "message_event")
+              guard ((t :: Text) == "message_event")
                 >> (o .: "object" >>= \e -> UCallbackQuary <$> parseJSON (Object e))
           )
       <|> pure UnknownUpdate
@@ -175,6 +175,6 @@ newtype SnackBar = SnackBar Text
 instance ToJSON SnackBar where
   toJSON (SnackBar txt) =
     object
-      [ "type" .= ("show_snackbar" :: String),
+      [ "type" .= ("show_snackbar" :: Text),
         "text" .= txt
       ]

@@ -2,12 +2,9 @@
 
 module Internal.Req (makeRequest, parseResponse) where
 
-import Control.Concurrent (threadDelay)
 import Control.Monad.Catch
-  ( Exception (fromException, toException),
-    MonadCatch,
+  ( MonadCatch,
     MonadThrow (..),
-    handle,
   )
 import Control.Monad.IO.Class (MonadIO (..))
 import Data.Aeson (FromJSON, ToJSON, eitherDecode)
@@ -15,19 +12,20 @@ import qualified Data.ByteString.Lazy as B
 import qualified Data.ByteString.Lazy.Char8 as BC
 import Data.Function ((&))
 import Data.String (IsString (fromString))
-import Data.Text (Text, intercalate, unpack)
+import Data.Text (Text)
+import qualified Data.Text as T
 import Exceptions.Request
 import qualified Handlers.Logger as L
+import Internal.ShowText (showText)
 import Network.HTTP.Req
-import System.Exit (exitFailure)
 
 parseResponse :: (FromJSON response, MonadThrow m, Show response) => L.Handle m -> B.ByteString -> m response
 parseResponse hLogger respBody = case eitherDecode respBody of
   Right result -> do
-    L.debug hLogger (show result)
+    L.debug hLogger (showText result)
     return result
   Left e -> do
-    L.error hLogger $ ("Parsing failed due to mismatching type, error:\n\t" <> fromString e <> "\n") <> BC.unpack respBody
+    L.error hLogger $ ("Parsing failed due to mismatching type, error:\n\t" <> fromString e <> "\n") <> (T.pack . BC.unpack $ respBody)
     throwM $ RParseException . WrongType . fromString $ e
 
 makeRequest ::
@@ -41,17 +39,17 @@ makeRequest ::
 makeRequest hLogger maybeBody url methods params = do
   resp <- sendRequestReq maybeBody url methods params
   L.debug hLogger $
-    ( "Got response from " <> unpack targetUrl
+    ( "Got response from " <> targetUrl
         <> "\n\tCode: "
-        <> show (resp & responseStatusCode)
+        <> showText (resp & responseStatusCode)
         <> "\n\tDescription: "
-        <> (resp & show . responseStatusMessage)
+        <> showText (resp & responseStatusMessage)
         <> "\n\tBody: "
     )
-      <> BC.unpack (resp & responseBody)
+      <> (T.pack . BC.unpack $ resp & responseBody)
   return (resp & responseBody)
   where
-    targetUrl = url <> "/" <> intercalate "/" methods <> "?" <> (intercalate "&" . map (\(k, v) -> k <> "=" <> v) $ params)
+    targetUrl = url <> "/" <> T.intercalate "/" methods <> "?" <> (T.intercalate "&" . map (\(k, v) -> k <> "=" <> v) $ params)
 
 -- | Function to make requests using Network.HTTP.Req library
 -- | Can throw Exceptions from Network.HTTP.Client
