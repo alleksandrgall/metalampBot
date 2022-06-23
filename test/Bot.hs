@@ -97,16 +97,16 @@ processCallback = hspec $ do
           let userRepeats = HM.fromList userRepeatList
               callBack = B.CallbackQuery targetUser "cbId" changeToThat
               (newUserRepeats, _) = run $ B.processCallback mockHandle callBack userRepeats
-              shouldBeUserRepeats = HM.insert targetUser (read changeToThat :: Int) userRepeats
+              shouldBeUserRepeats = HM.insert targetUser (read . unpack $ changeToThat :: Int) userRepeats
            in newUserRepeats == shouldBeUserRepeats
 
     it "ignores bad callback data" $ do
       property $ \userRepeatList targetUser changeToThat ->
         let userRepeats = HM.fromList userRepeatList
-            callBack = B.CallbackQuery targetUser "cbId" changeToThat
+            callBack = B.CallbackQuery targetUser "cbId" (pack changeToThat)
             (newUserRepeats, send) =
               run $
-                if changeToThat `notElem` allowedCallbackData
+                if pack changeToThat `notElem` allowedCallbackData
                   then B.processCallback mockHandle callBack userRepeats
                   else return userRepeats
          in newUserRepeats == userRepeats && null send

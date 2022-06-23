@@ -38,6 +38,7 @@ library
       Handlers.Bot
       Handlers.Logger
       Internal.Req
+      Internal.ShowText
       Internal.Utils
       Logger.IO
       Logger.IO.Implement

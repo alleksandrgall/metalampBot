@@ -16,25 +16,23 @@ import Control.Applicative (Alternative ((<|>)))
 import Control.Monad (guard)
 import Data.Aeson
 import Data.Aeson.Types (Parser)
-import Data.Char (toLower)
 import Data.Foldable (Foldable (toList))
 import Data.Hashable (Hashable)
 import Data.Int (Int64)
-import Data.List (stripPrefix)
-import Data.Maybe (fromJust)
 import Data.String (IsString (..))
 import Data.Text (Text)
+import qualified Data.Text as T
 import GHC.Exts (IsList (fromList))
 import GHC.Generics (Generic)
 import Handlers.Bot
   ( CallbackQuery (..),
     Command (..),
-    CommandType (..),
     MessageGet (..),
     MessageSend (..),
     SendContent (..),
     Update (..),
   )
+import Internal.Utils (commandFromString)
 
 -- | Type for telegram list of commands
 newtype Commands = Commands [(Text, Text)] deriving (Generic)
@@ -66,11 +64,11 @@ instance (FromJSON a) => FromJSON (TGResult a) where
   parseJSON _ = mempty
 
 -- | Type for telegram gettable content
-data TGGettable = GText String (Maybe [Entity]) | GSticker String
+data TGGettable = GText Text (Maybe [Entity]) | GSticker Text
   deriving (Show, Eq)
 
 instance IsString TGGettable where
-  fromString s = GText s Nothing
+  fromString s = GText (fromString s) Nothing
 
 -- | Type and instance for telegram keyboard
 data TGKeyboard = TGKeyboard
@@ -129,30 +127,20 @@ instance FromJSON (CallbackQuery TGUserInfo) where
       <*> o .: "data"
   parseJSON _ = mempty
 
--- | Aeson instances for telegram Command
--- If the message contains a command all other content of the fornamed message will be ignored
--- If the message contains multiple commands only first one will be processed
-commandFromString :: String -> usInf -> Maybe (Command usInf)
-commandFromString c ui = case map toLower c of
-  "/repeat" -> Just $ Command ui Repeat
-  "/help" -> Just $ Command ui Help
-  "/start" -> Just $ Command ui Start
-  _ -> Nothing
-
 instance FromJSON (Command TGUserInfo) where
   parseJSON (Object o) = do
     ui <- parseJSON (Object o)
-    txt <- (o .: "text" :: Parser String)
+    txt <- (o .: "text" :: Parser Text)
     ents <- o .: "entities"
     (start, finish) <- withArray "command start and finish" (findBotCommand . toList) ents
-    maybe mempty pure (commandFromString (take finish $ drop start txt) ui)
+    maybe mempty pure (commandFromString (T.take finish $ T.drop start txt) ui)
     where
       findBotCommand :: [Value] -> Parser (Int, Int)
       findBotCommand =
         mconcat
           . map
             ( withObject "" $ \e -> do
-                t <- (e .: "type" :: Parser String)
+                t <- (e .: "type" :: Parser Text)
                 guard (t == "bot_command")
                 (,) <$> e .: "offset" <*> e .: "length"
             )
@@ -182,12 +170,12 @@ instance FromJSON TGUpdateWithId where
 
 --
 data Entity = Entity
-  { eType :: String,
+  { eType :: Text,
     eOffset :: Int,
     eLength :: Int,
-    eUrl :: Maybe String,
+    eUrl :: Maybe Text,
     eUser :: Maybe EntityUser,
-    eLanguage :: Maybe String
+    eLanguage :: Maybe Text
   }
   deriving (Show, Generic, Eq)
 
@@ -200,7 +188,7 @@ instance FromJSON Entity where
 data EntityUser = EntityUser
   { euId :: Int64,
     euIsBot :: Bool,
-    euFirstName :: String
+    euFirstName :: Text
   }
   deriving (Show, Generic, Eq)
 

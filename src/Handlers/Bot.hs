@@ -3,9 +3,8 @@
 
 module Handlers.Bot where
 
-import Control.Monad (foldM, forever, replicateM_, unless)
+import Control.Monad (foldM, replicateM_)
 import Data.Bifunctor (first)
-import Data.Foldable (traverse_)
 import Data.Function ((&))
 import qualified Data.HashMap.Strict as HM
 import Data.Hashable (Hashable)
@@ -13,6 +12,7 @@ import Data.Int (Int64)
 import Data.String (IsString (..))
 import Data.Text (Text, unpack)
 import qualified Handlers.Logger as L
+import Internal.ShowText (showText)
 import Text.Read (readMaybe)
 
 data MessageGet gettable usInf = MessageGet
@@ -35,8 +35,8 @@ data MessageSend gettable usInf = MessageSend
 
 data CallbackQuery usInf = CallbackQuery
   { cbUserInfo :: usInf,
-    cbId :: String,
-    cbData :: String
+    cbId :: Text,
+    cbData :: Text
   }
   deriving (Show, Eq)
 
@@ -113,11 +113,11 @@ processUpdates h@Handle {..} userRepeats uls = do
   L.info hLogger "Updates were processed."
   return newUserRepeats
   where
-    processUpdateContent userRepeats upd = case upd of
-      UCallbackQuary cb -> processCallback h cb userRepeats
-      UCommand c -> processCommand h c >> return userRepeats
-      UMessage m -> processMessage h m userRepeats >> return userRepeats
-      UnknownUpdate -> L.info hLogger "Got an unknown update." >> return userRepeats
+    processUpdateContent accUserRepeats upd = case upd of
+      UCallbackQuary cb -> processCallback h cb accUserRepeats
+      UCommand c -> processCommand h c >> return accUserRepeats
+      UMessage m -> processMessage h m accUserRepeats >> return accUserRepeats
+      UnknownUpdate -> L.info hLogger "Got an unknown update." >> return accUserRepeats
 
 newtype RepeatNum = RepeatNum Int deriving (Enum, Eq, Ord, Num, Real, Integral)
 
@@ -131,39 +131,39 @@ instance Read RepeatNum where
 
 processCallback :: Handle gettable usInf m -> CallbackQuery usInf -> HM.HashMap usInf Int -> m (HM.HashMap usInf Int)
 processCallback Handle {..} cb@CallbackQuery {..} userRepeats = do
-  L.info hLogger ("Processing callback from the " <> show cbUserInfo <> "...")
-  let maybeNewRepeat = readMaybe cbData :: Maybe RepeatNum
+  L.info hLogger ("Processing callback from the " <> showText cbUserInfo <> "...")
+  let maybeNewRepeat = readMaybe . unpack $ cbData :: Maybe RepeatNum
   case maybeNewRepeat of
     Nothing ->
-      L.warning hLogger ("Bad callback data from the " <> show cbUserInfo <> ", data: " <> fromString cbData)
+      L.warning hLogger ("Bad callback data from the " <> showText cbUserInfo <> ", data: " <> cbData)
         >> return userRepeats
     Just newRepeatNum -> do
       hAnswerCallback (hConfig & cRepeatMes) cb
       L.info
         hLogger
-        ( "Repeat number of the " <> show cbUserInfo <> " was adjusted and answer was send to the user\n\t"
+        ( "Repeat number of the " <> showText cbUserInfo <> " was adjusted and answer was send to the user\n\t"
             <> "New number: "
-            <> show newRepeatNum
+            <> showText newRepeatNum
         )
       return $ HM.insert cbUserInfo (fromIntegral newRepeatNum) userRepeats
 
 processCommand :: (IsString gettable) => Handle gettable usInf m -> Command usInf -> m ()
 processCommand Handle {..} Command {..} = do
-  L.info hLogger ("Processing command " <> show cCommandType <> " from the " <> show cUserInfo <> "...")
+  L.info hLogger ("Processing command " <> showText cCommandType <> " from the " <> showText cUserInfo <> "...")
   case cCommandType of
     Start -> do
       hSendMes $ MessageSend cUserInfo (fromString . unpack $ hConfig & cStartMes)
-      L.info hLogger ("New user has been added, info:" <> show cUserInfo)
+      L.info hLogger ("New user has been added, info:" <> showText cUserInfo)
     Help -> do
       hSendMes $ MessageSend cUserInfo (fromString . unpack $ hConfig & cHelpMes)
-      L.info hLogger ("Help message was sent to the " <> show cUserInfo)
+      L.info hLogger ("Help message was sent to the " <> showText cUserInfo)
     Repeat -> do
       hSendMes $ MessageSend cUserInfo $ CKeyboard (hConfig & cRepeatKeyboardMes)
-      L.info hLogger ("Keyboard was sent to the " <> show cUserInfo)
+      L.info hLogger ("Keyboard was sent to the " <> showText cUserInfo)
 
 processMessage :: (IsString gettable) => Handle gettable usInf m -> MessageGet gettable usInf -> HM.HashMap usInf Int -> m ()
 processMessage Handle {..} MessageGet {..} userRepeats = do
-  L.info hLogger $ "Processing message from the " <> show mgUserInfo
+  L.info hLogger $ "Processing message from the " <> showText mgUserInfo
   userRepeat <- maybe (return (hConfig & cBaseRepeat)) return $ HM.lookup mgUserInfo userRepeats
   replicateM_ userRepeat $ hSendMes (MessageSend mgUserInfo (CGettable mgContent))
-  L.info hLogger $ "Message was sent " <> show userRepeat <> " times to the " <> show mgUserInfo
+  L.info hLogger $ "Message was sent " <> showText userRepeat <> " times to the " <> showText mgUserInfo

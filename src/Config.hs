@@ -77,8 +77,8 @@ data Logger = Logger
 instance FromConfig Logger
 
 data AppConfig = AppConfig
-  { appConfigTeleToken :: String,
-    appConfigVkToken :: String,
+  { appConfigTeleToken :: Text,
+    appConfigVkToken :: Text,
     appConfigMessenger :: Messenger,
     appConfigStart :: Start,
     appConfigRepeat :: Repeat,
