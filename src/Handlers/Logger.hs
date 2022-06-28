@@ -10,6 +10,7 @@ module Handlers.Logger
   )
 where
 
+import Control.Monad (when)
 import Data.Function ((&))
 import Data.Text (Text)
 import Prelude hiding (error, log)
@@ -26,9 +27,7 @@ newtype Config = Config
   }
 
 log :: (Monad m) => Handle m -> LogLevel -> Text -> m ()
-log Handle {..} lvl m
-  | lvl >= (hConfig & cDefaultLogLevel) = hLogMessage lvl m
-  | otherwise = return ()
+log Handle {..} lvl m = when (lvl >= (hConfig & cDefaultLogLevel)) (hLogMessage lvl m)
 
 debug, info, warning, error :: (Monad m) => Handle m -> Text -> m ()
 debug h = log h Debug

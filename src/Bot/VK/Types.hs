@@ -30,17 +30,20 @@ import Handlers.Bot
     Update (..),
   )
 import Internal.Utils (commandFromString)
+import Text.Read (readMaybe)
 
 -- | Type for vk long poll server info used
 data GetLongPollAnswer = GetLongPollAnswer
   { key :: Text,
     server :: Text,
-    ts :: Text
+    ts :: Int64
   }
   deriving (Show, Generic)
 
 instance FromJSON GetLongPollAnswer where
-  parseJSON (Object o) = o .: "response" >>= genericParseJSON defaultOptions
+  parseJSON (Object o) =
+    o .: "response" >>= \r ->
+      GetLongPollAnswer <$> r .: "key" <*> r .: "server" <*> ((r .: "ts") >>= maybe mempty pure . readMaybe)
   parseJSON _ = mempty
 
 -- | Type for VK result of getUpdate
@@ -51,7 +54,7 @@ data VKUpdateResult = VKUpdateResult
   deriving (Generic, Show)
 
 instance FromJSON VKUpdateResult where
-  parseJSON (Object o) = VKUpdateResult <$> (read <$> o .: "ts") <*> o .: "updates"
+  parseJSON (Object o) = VKUpdateResult <$> ((o .: "ts") >>= maybe mempty pure . readMaybe) <*> o .: "updates"
   parseJSON _ = mempty
 
 -- | Type for VK user info and instances

@@ -86,7 +86,7 @@ init keyR serverR token groupId hL = do
   initInfo <- parseResponse hL res
   liftIO $ writeIORef serverR (getServerPath . server $ initInfo)
   liftIO $ writeIORef keyR (key initInfo)
-  return (read $ unpack $ initInfo & ts)
+  return (initInfo & ts)
   where
     getServerPath = T.reverse . T.takeWhile (/= '/') . T.reverse
 
