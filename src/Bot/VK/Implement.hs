@@ -10,10 +10,9 @@ import qualified Data.ByteString.Lazy as BS (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as CBS (unpack)
 import Data.Coerce (coerce)
 import Data.Function ((&))
-import Data.HashMap.Internal.Strict as HM (HashMap, insert, lookup)
 import Data.IORef
 import Data.Int (Int64)
-import Data.Text (Text, pack, unpack)
+import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Handlers.Bot as B
 import qualified Handlers.Logger as L
@@ -123,7 +122,7 @@ sendMes token hL B.MessageSend {..} =
     messageInfo = case msContent of
       B.CGettable (GText txt) -> [("message", txt)]
       B.CGettable (GSticker id_) -> [("sticker_id", showText id_)]
-      B.CKeyboard txt -> [("message", txt), ("keyboard", pack . CBS.unpack . encode $ VKKeyboard)]
+      B.CKeyboard txt -> [("message", txt), ("keyboard", T.pack . CBS.unpack . encode $ VKKeyboard)]
 
 ansCb :: (MonadCatch m, MonadIO m) => Text -> L.Handle m -> Text -> B.CallbackQuery VKUserInfo -> m ()
 ansCb token hL repeatMessage B.CallbackQuery {..} =
@@ -135,5 +134,5 @@ ansCb token hL repeatMessage B.CallbackQuery {..} =
       [ ("event_id", cbId),
         ("user_id", showText $ cbUserInfo & uiId),
         ("peer_id", showText $ cbUserInfo & uiPeerId),
-        ("event_data", pack . CBS.unpack . encode $ SnackBar repeatMessage)
+        ("event_data", T.pack . CBS.unpack . encode $ SnackBar repeatMessage)
       ]
