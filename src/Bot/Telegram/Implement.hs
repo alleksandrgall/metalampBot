@@ -4,12 +4,10 @@ import Bot.Telegram.Types
 import Config
 import Control.Monad (void)
 import Control.Monad.Catch (MonadCatch)
-import Control.Monad.IO.Class (MonadIO (liftIO))
+import Control.Monad.IO.Class (MonadIO ())
 import Data.Aeson (ToJSON)
 import qualified Data.ByteString.Lazy as BS
 import Data.Function ((&))
-import qualified Data.HashMap.Lazy as HM
-import Data.IORef (modifyIORef', readIORef)
 import Data.Int (Int64)
 import Data.Text (Text)
 import qualified Handlers.Bot as B
